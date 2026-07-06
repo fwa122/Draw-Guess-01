@@ -1,0 +1,2785 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas 绘画应用</title>
+    <link rel="stylesheet" href="css/common.css">
+    <style>
+        :root {
+            /* 主题色 - 浅色系 */
+            --bg-primary: #f8fafc;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f1f5f9;
+            --glass-bg: rgba(255, 255, 255, 0.9);
+            --glass-border: rgba(148, 163, 184, 0.2);
+            --text-primary: #1e293b;
+            --text-secondary: rgba(71, 85, 105, 0.8);
+            --text-muted: rgba(100, 116, 139, 0.6);
+            --accent-color: #6366f1;
+            --accent-light: #a5b4fc;
+            --accent-glow: rgba(99, 102, 241, 0.25);
+            
+            /* 圆角 */
+            --radius-sm: 12px;
+            --radius-md: 16px;
+            --radius-lg: 24px;
+            --radius-full: 9999px;
+            
+            /* 阴影 - 浅色系柔和阴影 */
+            --shadow-sm: 0 2px 8px rgba(148, 163, 184, 0.1);
+            --shadow-md: 0 4px 16px rgba(148, 163, 184, 0.15);
+            --shadow-lg: 0 8px 32px rgba(148, 163, 184, 0.2);
+            --shadow-accent: 0 4px 12px rgba(99, 102, 241, 0.3);
+            
+            /* 过渡 */
+            --transition-fast: 0.15s ease;
+            --transition-normal: 0.25s ease;
+            --transition-slow: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: var(--bg-primary);
+            min-height: 100vh;
+            display: flex;
+            overflow: hidden;
+            color: var(--text-primary);
+            overscroll-behavior-x: none;
+            overscroll-behavior-y: none;
+            touch-action: none;
+        }
+
+        /* 左侧工具栏 */
+        .sidebar {
+            position: fixed;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            box-shadow: var(--shadow-lg);
+            z-index: 100;
+            animation: slideIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+        }
+
+        .sidebar.collapsed {
+            transform: translateY(-50%) translateX(-120px);
+            opacity: 0.3;
+        }
+
+        .sidebar.collapsed:hover {
+            opacity: 0.6;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-50%) translateX(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(-50%) translateX(0);
+            }
+        }
+
+        /* 工具栏折叠按钮 */
+        .sidebar-toggle {
+            position: absolute;
+            right: -18px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 36px;
+            height: 36px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-full);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: all var(--transition-normal);
+            z-index: 101;
+            box-shadow: var(--shadow-md);
+        }
+
+        .sidebar-toggle:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: var(--text-primary);
+            transform: translateY(-50%) scale(1.15);
+        }
+
+        .sidebar-toggle svg {
+            width: 18px;
+            height: 18px;
+            transition: transform var(--transition-normal);
+        }
+
+        .sidebar.collapsed .sidebar-toggle svg {
+            transform: rotate(180deg);
+        }
+
+        .sidebar-toggle::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: calc(100% + 12px);
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            padding: 6px 12px;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity var(--transition-fast);
+            box-shadow: var(--shadow-md);
+            z-index: 1000;
+        }
+
+        .sidebar-toggle:hover::after {
+            opacity: 1;
+        }
+
+        .sidebar-section {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .sidebar-divider {
+            height: 1px;
+            background: var(--glass-border);
+            margin: 8px 0;
+        }
+
+        /* 工具按钮 */
+        .tool-btn {
+            width: 48px;
+            height: 48px;
+            border: none;
+            border-radius: var(--radius-md);
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all var(--transition-normal);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .tool-btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, var(--accent-color), #8b5cf6);
+            opacity: 0;
+            transition: opacity var(--transition-normal);
+        }
+
+        .tool-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+            transform: scale(1.05);
+        }
+
+        .tool-btn.active {
+            background: var(--accent-color);
+            color: white;
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        .tool-btn.active::before {
+            opacity: 1;
+        }
+
+        .tool-btn svg {
+            width: 22px;
+            height: 22px;
+            position: relative;
+            z-index: 1;
+            transition: transform var(--transition-fast);
+        }
+
+        .tool-btn:hover svg {
+            transform: scale(1.1);
+        }
+
+        .tool-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* 撤销/重做按钮组 */
+        .undo-redo-group {
+            display: flex;
+            gap: 4px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: var(--radius-md);
+            padding: 4px;
+        }
+
+        .undo-redo-btn {
+            width: 40px;
+            height: 40px;
+            border: none;
+            border-radius: var(--radius-sm);
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all var(--transition-fast);
+        }
+
+        .undo-redo-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+        }
+
+        .undo-redo-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .undo-redo-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        /* 颜色选择器面板 */
+        .color-panel {
+            position: fixed;
+            left: 90px;
+            top: 50%;
+            transform: translateY(-50%) translateX(-20px);
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            box-shadow: var(--shadow-lg);
+            z-index: 90;
+            opacity: 0;
+            visibility: hidden;
+            transition: all var(--transition-normal);
+            min-width: 200px;
+        }
+
+        .sidebar.collapsed + .color-panel.active {
+            left: 50px;
+        }
+
+        .color-panel.active {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(-50%) translateX(0);
+        }
+
+        .color-panel-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* 调色板 */
+        .palette {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .color-swatch {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-full);
+            cursor: pointer;
+            position: relative;
+            transition: all var(--transition-fast);
+            border: 3px solid transparent;
+        }
+
+        .color-swatch::before {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: var(--radius-full);
+            background: inherit;
+            opacity: 0;
+            transition: opacity var(--transition-fast);
+        }
+
+        .color-swatch:hover {
+            transform: scale(1.15);
+            z-index: 1;
+        }
+
+        .color-swatch.active {
+            transform: scale(1.2);
+            box-shadow: 0 0 20px var(--accent-glow);
+            border-color: white;
+        }
+
+        .color-swatch.active::before {
+            opacity: 0.3;
+        }
+
+        /* 自定义颜色选择器 */
+        .custom-color {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding-top: 12px;
+            border-top: 1px solid var(--glass-border);
+        }
+
+        .custom-color-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .color-picker-wrapper {
+            position: relative;
+            width: 36px;
+            height: 36px;
+        }
+
+        .color-picker {
+            width: 100%;
+            height: 100%;
+            border: none;
+            border-radius: var(--radius-full);
+            cursor: pointer;
+            background: transparent;
+            padding: 0;
+        }
+
+        .color-picker::-webkit-color-swatch-wrapper {
+            padding: 0;
+        }
+
+        .color-picker::-webkit-color-swatch {
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: var(--radius-full);
+        }
+
+        /* 画笔粗细调节器 */
+        .size-panel {
+            position: fixed;
+            left: 90px;
+            top: 50%;
+            transform: translateY(-50%) translateX(-20px);
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            box-shadow: var(--shadow-lg);
+            z-index: 90;
+            opacity: 0;
+            visibility: hidden;
+            transition: all var(--transition-normal);
+            min-width: 200px;
+        }
+
+        .sidebar.collapsed ~ .size-panel.active {
+            left: 50px;
+        }
+
+        .size-panel.active {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(-50%) translateX(0);
+        }
+
+        .size-panel-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* 圆形径向调节器 */
+        .radial-slider-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .radial-slider {
+            width: 140px;
+            height: 140px;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .radial-slider-track {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: linear-gradient(135deg, 
+                rgba(99, 102, 241, 0.2), 
+                rgba(139, 92, 246, 0.2)
+            );
+            position: relative;
+            border: 3px solid var(--glass-border);
+        }
+
+        .radial-slider-value {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .radial-slider-dot {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background: var(--accent-color);
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 15px var(--accent-glow);
+            pointer-events: none;
+            transition: transform var(--transition-fast);
+        }
+
+        .size-presets {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .size-preset-btn {
+            width: 40px;
+            height: 40px;
+            border: none;
+            border-radius: var(--radius-md);
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all var(--transition-fast);
+        }
+
+        .size-preset-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+            transform: translateY(-2px);
+        }
+
+        .size-preset-btn.active {
+            background: var(--accent-color);
+            color: white;
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+
+        /* 主画布区域 */
+        .canvas-area {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 40px 40px 140px;
+            position: relative;
+            background: linear-gradient(135deg, #e0e7ff 0%, #f8fafc 50%, #ede9fe 100%);
+            overscroll-behavior-x: none;
+            overscroll-behavior-y: none;
+        }
+
+        .canvas-area::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background:
+                radial-gradient(circle at 20% 30%, rgba(139, 92, 246, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(167, 139, 250, 0.08) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        .canvas-container {
+            background: white;
+            border-radius: var(--radius-lg);
+            box-shadow:
+                var(--shadow-lg),
+                0 0 0 1px rgba(148, 163, 184, 0.1),
+                inset 0 1px 0 rgba(255, 255, 255, 0.8);
+            position: relative;
+            overflow: hidden;
+        }
+
+        #drawingCanvas {
+            display: block;
+            cursor: crosshair;
+            border-radius: var(--radius-lg);
+            touch-action: none;
+        }
+
+        /* 底部信息栏 */
+        .bottom-bar {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: var(--radius-full);
+            padding: 10px 20px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            box-shadow: var(--shadow-md);
+            font-size: 12px;
+            color: var(--text-primary);
+            z-index: 80;
+        }
+
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .info-label {
+            opacity: 0.7;
+        }
+
+        .info-value {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        /* 右侧操作面板 */
+        .actions-panel {
+            position: fixed;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            box-shadow: var(--shadow-lg);
+            z-index: 100;
+            animation: slideInRight 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateY(-50%) translateX(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(-50%) translateX(0);
+            }
+        }
+
+        .action-btn {
+            width: 48px;
+            height: 48px;
+            border: none;
+            border-radius: var(--radius-md);
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all var(--transition-normal);
+            position: relative;
+        }
+
+        .action-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+            transform: scale(1.05);
+        }
+
+        .action-btn:active {
+            transform: scale(0.95);
+        }
+
+        .action-btn svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .action-btn.danger:hover {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .action-btn.save:hover {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+
+        /* ===== 游戏结束排行榜弹窗 ===== */
+        .game-end-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 300;
+            opacity: 0;
+            visibility: hidden;
+            transition: all var(--transition-normal);
+        }
+
+        .game-end-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .game-end-popup {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-lg);
+            padding: 40px 48px;
+            width: 90%;
+            max-width: 520px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow-lg);
+            transform: scale(0.9);
+            transition: all var(--transition-normal);
+            text-align: center;
+        }
+
+        .game-end-overlay.show .game-end-popup {
+            transform: scale(1);
+        }
+
+        .game-end-popup h2 {
+            font-size: 26px;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .game-end-subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-bottom: 28px;
+        }
+
+        .ranking-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 28px;
+        }
+
+        .ranking-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 18px;
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-md);
+            text-align: left;
+        }
+
+        .ranking-item.top1 {
+            background: linear-gradient(135deg, rgba(251, 191, 36, 0.12), rgba(245, 158, 11, 0.08));
+            border: 1px solid rgba(245, 158, 11, 0.25);
+        }
+
+        .ranking-item.top2 {
+            background: linear-gradient(135deg, rgba(203, 213, 225, 0.2), rgba(148, 163, 184, 0.12));
+            border: 1px solid rgba(148, 163, 184, 0.25);
+        }
+
+        .ranking-item.top3 {
+            background: linear-gradient(135deg, rgba(251, 146, 60, 0.12), rgba(234, 88, 12, 0.08));
+            border: 1px solid rgba(251, 146, 60, 0.25);
+        }
+
+        .ranking-num {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 700;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .ranking-num.gold { background: linear-gradient(135deg, #FBBF24, #F59E0B); }
+        .ranking-num.silver { background: linear-gradient(135deg, #CBD5E1, #94A3B8); }
+        .ranking-num.bronze { background: linear-gradient(135deg, #FB923C, #EA580C); }
+        .ranking-num.normal { background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--glass-border); }
+
+        .ranking-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-tertiary);
+            flex-shrink: 0;
+        }
+
+        .ranking-avatar svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .ranking-avatar-fallback {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--accent-color);
+            color: white;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .ranking-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .ranking-name {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .ranking-host {
+            font-size: 11px;
+            color: var(--accent-color);
+            margin-left: 6px;
+        }
+
+        .ranking-score {
+            font-size: 18px;
+            font-weight: 700;
+            color: #f59e0b;
+        }
+
+        .btn-back-room {
+            width: 100%;
+            padding: 14px 24px;
+            border: none;
+            border-radius: var(--radius-full);
+            background: linear-gradient(135deg, var(--accent-color), #8b5cf6);
+            color: white;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--transition-normal);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-back-room:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 1024px) {
+            .sidebar {
+                left: 10px;
+            }
+            
+            .sidebar.collapsed {
+                transform: translateY(-50%) translateX(-100px);
+            }
+            
+            .actions-panel {
+                right: 10px;
+            }
+            
+            .canvas-area {
+                padding-left: 100px;
+            }
+            
+            .canvas-area.sidebar-collapsed {
+                padding-left: 40px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                left: 10px;
+                top: auto;
+                bottom: 80px;
+                transform: none;
+                flex-direction: row;
+                padding: 12px;
+                gap: 4px;
+            }
+            
+            .sidebar.collapsed {
+                transform: translateX(-200px);
+                opacity: 0.5;
+            }
+            
+            .sidebar-toggle {
+                right: -12px;
+                width: 32px;
+                height: 32px;
+                top: 50%;
+            }
+            
+            .sidebar-section {
+                flex-direction: row;
+            }
+            
+            .sidebar-divider {
+                width: 1px;
+                height: 48px;
+                margin: 0 8px;
+            }
+            
+            .tool-btn {
+                width: 40px;
+                height: 40px;
+            }
+            
+            .undo-redo-btn {
+                width: 36px;
+                height: 36px;
+            }
+            
+            .actions-panel {
+                right: 10px;
+                top: auto;
+                bottom: 80px;
+                transform: none;
+                flex-direction: row;
+                gap: 4px;
+                padding: 12px;
+            }
+            
+            .action-btn {
+                width: 40px;
+                height: 40px;
+            }
+            
+            .canvas-area {
+                padding: 20px;
+            }
+            
+            .color-panel,
+            .size-panel {
+                left: 50%;
+                top: 50%;
+                transform: translate(-50%, -50%) translateX(-20px);
+            }
+            
+            .color-panel.active,
+            .size-panel.active {
+                transform: translate(-50%, -50%) translateX(0);
+            }
+            
+            .bottom-bar {
+                font-size: 11px;
+                padding: 8px 16px;
+                gap: 12px;
+            }
+        }
+
+        /* Tooltip */
+        .tool-btn::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: calc(100% + 12px);
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            padding: 6px 12px;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity var(--transition-fast);
+            box-shadow: var(--shadow-md);
+            z-index: 1000;
+        }
+
+        .tool-btn:hover::after {
+            opacity: 1;
+        }
+
+        @media (max-width: 768px) {
+            .tool-btn::after {
+                display: none;
+            }
+        }
+
+        /* 滚动条样式 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* ===== 实时评论弹幕系统 ===== */
+        .barrage-container {
+            position: fixed;
+            left: 140px;
+            right: 100px;
+            top: 20px;
+            height: 80px;
+            pointer-events: none;
+            z-index: 150;
+            overflow: hidden;
+        }
+
+        .barrage-item {
+            position: absolute;
+            right: -300px;
+            top: 0;
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: var(--radius-md);
+            padding: 12px 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 
+                0 2px 8px rgba(148, 163, 184, 0.12),
+                0 1px 3px rgba(148, 163, 184, 0.08);
+            animation: barrageSlide 10s linear forwards;
+            border: 2px solid transparent;
+            max-width: 320px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        @keyframes barrageSlide {
+            0% {
+                right: -300px;
+                opacity: 0;
+            }
+            3% {
+                opacity: 1;
+            }
+            95% {
+                opacity: 1;
+            }
+            100% {
+                right: 100%;
+                opacity: 0;
+            }
+        }
+
+        .barrage-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 700;
+            color: white;
+            flex-shrink: 0;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .barrage-content {
+            color: #1e293b;
+            font-size: 14px;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            letter-spacing: 0.01em;
+        }
+
+        .barrage-name {
+            font-weight: 700;
+            color: var(--accent-color);
+            margin-right: 4px;
+        }
+
+        /* ===== 绘画目标选择弹窗 ===== */
+        .target-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(148, 163, 184, 0.3);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 300;
+            opacity: 0;
+            visibility: hidden;
+            transition: all var(--transition-normal);
+        }
+
+        .target-modal.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .target-modal-content {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-lg);
+            padding: 40px 50px;
+            max-width: 600px;
+            width: 90%;
+            box-shadow: var(--shadow-lg);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            transform: scale(0.9);
+            transition: transform var(--transition-normal);
+        }
+
+        .target-modal.show .target-modal-content {
+            transform: scale(1);
+        }
+
+        .target-modal-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .target-modal-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .target-modal-subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .target-step-indicator {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 30px;
+        }
+
+        .step-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--glass-border);
+            transition: all var(--transition-normal);
+        }
+
+        .step-dot.active {
+            background: var(--accent-color);
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+
+        .step-dot.completed {
+            background: var(--accent-color);
+        }
+
+        /* 分类/物品网格 */
+        .target-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 30px;
+        }
+
+        .target-card {
+            background: var(--bg-tertiary);
+            border: 2px solid rgba(148, 163, 184, 0.2);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all var(--transition-normal);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .target-card:hover {
+            background: rgba(99, 102, 241, 0.08);
+            border-color: var(--accent-color);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+        }
+
+        .target-card.selected {
+            background: rgba(99, 102, 241, 0.12);
+            border-color: var(--accent-color);
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        .target-card-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
+        .target-card-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .target-card.selected::after {
+            content: '✓';
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 24px;
+            height: 24px;
+            background: var(--accent-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        /* 确认按钮 */
+        .target-btn-group {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .target-btn {
+            padding: 12px 32px;
+            border-radius: var(--radius-md);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--transition-normal);
+            border: none;
+        }
+
+        .target-btn-primary {
+            background: linear-gradient(135deg, var(--accent-color), #8b5cf6);
+            color: white;
+            box-shadow: 0 4px 15px var(--accent-glow);
+        }
+
+        .target-btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px var(--accent-glow);
+        }
+
+        .target-btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .target-btn-secondary {
+            background: var(--glass-bg);
+            color: var(--text-secondary);
+            border: 1px solid var(--glass-border);
+        }
+
+        .target-btn-secondary:hover {
+            background: var(--glass-border);
+            color: var(--text-primary);
+        }
+
+        /* 当前目标显示 */
+        .current-target {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 2px solid var(--accent-light);
+            border-radius: var(--radius-pill);
+            padding: 10px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 200;
+            opacity: 0;
+            visibility: hidden;
+            transition: all var(--transition-normal);
+            box-shadow: var(--shadow-accent);
+        }
+
+        .current-target.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .current-target-icon {
+            font-size: 20px;
+        }
+
+        .current-target-text {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .current-target-hint {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .current-target-timer {
+            margin-left: 12px;
+            min-width: 44px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--accent-color);
+            color: white;
+            font-size: 14px;
+            font-weight: 700;
+            border-radius: var(--radius-pill);
+            padding: 0 10px;
+            transition: background 0.2s ease;
+        }
+
+        .current-target-timer.warning {
+            background: #ef4444;
+        }
+    </style>
+</head>
+<body>
+    <!-- 实时评论弹幕容器 -->
+    <div class="barrage-container" id="barrageContainer"></div>
+
+    <!-- 当前绘画目标显示 -->
+    <div class="current-target" id="currentTarget">
+        <div class="current-target-icon">🎯</div>
+        <div>
+            <div class="current-target-text" id="currentTargetText">正在绘画: 苹果</div>
+            <div class="current-target-hint">其他玩家正在猜测...</div>
+        </div>
+        <div class="current-target-timer" id="currentTargetTimer">--</div>
+    </div>
+
+    <!-- 绘画目标选择弹窗 -->
+    <div class="target-modal" id="targetModal">
+        <div class="target-modal-content">
+            <div class="target-modal-header">
+                <h2 class="target-modal-title">选择绘画目标</h2>
+                <p class="target-modal-subtitle">第1步：选择一个分类</p>
+            </div>
+
+            <!-- 步骤指示器 -->
+            <div class="target-step-indicator">
+                <div class="step-dot active" id="stepDot1"></div>
+                <div class="step-dot" id="stepDot2"></div>
+                <div class="step-dot" id="stepDot3"></div>
+            </div>
+
+            <!-- 分类/物品网格 -->
+            <div class="target-grid" id="targetGrid">
+                <!-- 分类会动态生成 -->
+            </div>
+
+            <!-- 确认按钮 -->
+            <div class="target-btn-group">
+                <button class="target-btn target-btn-secondary" id="btnPrev" style="display: none;">上一步</button>
+                <button class="target-btn target-btn-primary" id="btnNext" disabled>下一步</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 游戏结束排行榜弹窗 -->
+    <div class="game-end-overlay" id="gameEndOverlay">
+        <div class="game-end-popup">
+            <h2>🏆 游戏结束</h2>
+            <div class="game-end-subtitle">所有玩家都已完成绘画，最终排名如下</div>
+            <div class="ranking-list" id="rankingList">
+                <!-- 动态加载排行榜 -->
+            </div>
+            <button class="btn-back-room" id="btnBackToRoom">返回房间</button>
+        </div>
+    </div>
+
+    <!-- 左侧工具栏 -->
+    <div class="sidebar" id="sidebar">
+        <!-- 折叠按钮 -->
+        <button class="sidebar-toggle" id="sidebarToggle" data-tooltip="隐藏工具栏">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="15,18 9,12 15,6"/>
+            </svg>
+        </button>
+        
+        <!-- 绘画工具 -->
+        <div class="sidebar-section">
+            <button class="tool-btn active" id="btnBrush" data-tooltip="画笔">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 19l7-7 3 3-7 7-3-3z"/>
+                    <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>
+                    <path d="M2 2l7.586 7.586"/>
+                    <circle cx="11" cy="11" r="2"/>
+                </svg>
+            </button>
+            <button class="tool-btn" id="btnEraser" data-tooltip="橡皮擦">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 20H7L3 16c-.8-.8-.8-2 0-2.8L13.8 2.4c.8-.8 2-.8 2.8 0L21 6.8c.8.8.8 2 0 2.8L12 18"/>
+                    <path d="M6 12l6 6"/>
+                </svg>
+            </button>
+            <button class="tool-btn" id="btnAreaEraser" data-tooltip="区域擦除">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <line x1="9" y1="3" x2="9" y2="21"/>
+                    <line x1="15" y1="3" x2="15" y2="21"/>
+                    <line x1="3" y1="9" x2="21" y2="9"/>
+                    <line x1="3" y1="15" x2="21" y2="15"/>
+                </svg>
+            </button>
+        </div>
+        
+        <div class="sidebar-divider"></div>
+        
+        <!-- 颜色和大小 -->
+        <div class="sidebar-section">
+            <button class="tool-btn" id="btnColor" data-tooltip="颜色">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <circle cx="12" cy="12" r="6"/>
+                    <circle cx="12" cy="12" r="2"/>
+                </svg>
+            </button>
+            <button class="tool-btn" id="btnSize" data-tooltip="画笔大小">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M12 2v4"/>
+                    <path d="M12 18v4"/>
+                    <path d="M4.93 4.93l2.83 2.83"/>
+                    <path d="M16.24 16.24l2.83 2.83"/>
+                    <path d="M2 12h4"/>
+                    <path d="M18 12h4"/>
+                    <path d="M4.93 19.07l2.83-2.83"/>
+                    <path d="M16.24 7.76l2.83-2.83"/>
+                </svg>
+            </button>
+        </div>
+        
+        <div class="sidebar-divider"></div>
+        
+        <!-- 撤销/重做 -->
+        <div class="undo-redo-group">
+            <button class="undo-redo-btn" id="btnUndo" data-tooltip="撤销" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 7v6h6"/>
+                    <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>
+                </svg>
+            </button>
+            <button class="undo-redo-btn" id="btnRedo" data-tooltip="重做" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 7v6h-6"/>
+                    <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+    
+    <!-- 颜色选择面板 -->
+    <div class="color-panel" id="colorPanel">
+        <div class="color-panel-title">调色板</div>
+        <div class="palette" id="palette"></div>
+        <div class="custom-color">
+            <span class="custom-color-label">自定义颜色</span>
+            <div class="color-picker-wrapper">
+                <input type="color" class="color-picker" id="colorPicker" value="#6366f1">
+            </div>
+        </div>
+    </div>
+    
+    <!-- 画笔大小面板 -->
+    <div class="size-panel" id="sizePanel">
+        <div class="size-panel-title">画笔大小</div>
+        <div class="radial-slider-container">
+            <div class="radial-slider" id="radialSlider">
+                <div class="radial-slider-track">
+                    <div class="radial-slider-value" id="sizeValue">5</div>
+                    <div class="radial-slider-dot" id="sliderDot"></div>
+                </div>
+            </div>
+            <div class="size-presets">
+                <button class="size-preset-btn" data-size="2">2</button>
+                <button class="size-preset-btn active" data-size="5">5</button>
+                <button class="size-preset-btn" data-size="10">10</button>
+                <button class="size-preset-btn" data-size="20">20</button>
+                <button class="size-preset-btn" data-size="30">30</button>
+                <button class="size-preset-btn" data-size="50">50</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 主画布区域 -->
+    <div class="canvas-area">
+        <div class="canvas-container">
+            <canvas id="drawingCanvas" width="1000" height="700"></canvas>
+        </div>
+    </div>
+    
+    <!-- 右侧操作面板 -->
+    <div class="actions-panel">
+        <button class="action-btn" id="btnClear" data-tooltip="清空画布">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 6h18"/>
+                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                <line x1="10" y1="11" x2="10" y2="17"/>
+                <line x1="14" y1="11" x2="14" y2="17"/>
+            </svg>
+        </button>
+        <button class="action-btn save" id="btnSave" data-tooltip="保存图片">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7,10 12,15 17,10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+        </button>
+    </div>
+    
+    <!-- 底部信息栏 -->
+    <div class="bottom-bar">
+        <div class="info-item">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span class="info-label">坐标:</span>
+            <span class="info-value" id="coords">0, 0</span>
+        </div>
+        <div class="info-item">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            </svg>
+            <span class="info-label">画布:</span>
+            <span class="info-value">1000 × 700</span>
+        </div>
+        <div class="info-item">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-3.77 3.78a2 2 0 0 1-2.81 0l-1.63-1.63a2 2 0 0 1 0-2.81l3.78-3.77a6 6 0 0 1 7.94-7.94l-3.77 3.77z"/>
+            </svg>
+            <span class="info-label">工具:</span>
+            <span class="info-value" id="currentToolDisplay">画笔</span>
+        </div>
+        <div class="info-item">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/>
+            </svg>
+            <span class="info-label">大小:</span>
+            <span class="info-value" id="currentSizeDisplay">5</span>
+        </div>
+    </div>
+
+    <script>
+        // 颜色调色板配置
+        const colorPalettes = [
+            // 莫兰迪色系（低饱和度，高级灰调）
+            '#a8b4a0', '#b5a191', '#a7988c', '#c4b7a6', '#c9c0b8',
+            // 马卡龙色系（柔和甜美）
+            '#ffb6c1', '#ffc0cb', '#dda0dd', '#e6b8e6', '#b0e0e6',
+            // 霓虹色系（鲜艳明亮）
+            '#ff006e', '#fb5607', '#ffbe0b', '#3a86ff', '#8338ec',
+            // 经典色系
+            '#000000', '#ffffff', '#6366f1', '#8b5cf6', '#ec4899',
+            '#10b981', '#f59e0b', '#ef4444'
+        ];
+
+        // 初始化调色板
+        const palette = document.getElementById('palette');
+        colorPalettes.forEach((color, index) => {
+            const swatch = document.createElement('div');
+            swatch.className = 'color-swatch';
+            swatch.style.background = color;
+            swatch.dataset.color = color;
+            if (index === 11) { // 默认选中 #6366f1
+                swatch.classList.add('active');
+            }
+            palette.appendChild(swatch);
+        });
+
+        // Canvas 设置
+        const canvas = document.getElementById('drawingCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 状态管理
+        let isDrawing = false;
+        let currentTool = 'brush'; // brush | eraser | area-eraser
+        let currentColor = '#6366f1';
+        let currentSize = 5;
+        let eraserSize = 20; // 橡皮擦独立大小
+        let lastX = 0;
+        let lastY = 0;
+        
+        // 区域选择状态
+        let isAreaSelecting = false;
+        let areaStartX = 0;
+        let areaStartY = 0;
+        let areaEndX = 0;
+        let areaEndY = 0;
+        
+        // 历史记录
+        let history = [];
+        let historyStep = -1;
+        const MAX_HISTORY = 50;
+        let redoHistory = [];
+
+        // 保存历史
+        function saveHistory() {
+            historyStep++;
+            if (historyStep < history.length) {
+                history.length = historyStep;
+            }
+            history.push(canvas.toDataURL());
+            if (history.length > MAX_HISTORY) {
+                history.shift();
+                historyStep--;
+            }
+            redoHistory = [];
+            updateUndoRedoButtons();
+        }
+
+        // 更新撤销/重做按钮状态
+        function updateUndoRedoButtons() {
+            document.getElementById('btnUndo').disabled = historyStep <= 0;
+            document.getElementById('btnRedo').disabled = redoHistory.length === 0;
+        }
+
+        // 初始化画布
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        saveHistory();
+
+        // 工具栏交互
+        const btnBrush = document.getElementById('btnBrush');
+        const btnEraser = document.getElementById('btnEraser');
+        const btnAreaEraser = document.getElementById('btnAreaEraser');
+        const btnColor = document.getElementById('btnColor');
+        const btnSize = document.getElementById('btnSize');
+        const colorPanel = document.getElementById('colorPanel');
+        const sizePanel = document.getElementById('sizePanel');
+        const sizePanelTitle = document.querySelector('.size-panel-title');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        const canvasArea = document.querySelector('.canvas-area');
+
+        // 侧边栏折叠功能
+        sidebarToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            sidebar.classList.toggle('collapsed');
+            
+            // 更新折叠按钮的提示文字
+            if (sidebar.classList.contains('collapsed')) {
+                sidebarToggle.setAttribute('data-tooltip', '显示工具栏');
+                canvasArea.style.paddingLeft = '40px';
+            } else {
+                sidebarToggle.setAttribute('data-tooltip', '隐藏工具栏');
+                canvasArea.style.paddingLeft = '140px';
+            }
+        });
+
+        // 当侧边栏折叠时，点击侧边栏可以展开
+        sidebar.addEventListener('click', (e) => {
+            if (sidebar.classList.contains('collapsed') && e.target !== sidebarToggle) {
+                sidebar.classList.remove('collapsed');
+                sidebarToggle.setAttribute('data-tooltip', '隐藏工具栏');
+                canvasArea.style.paddingLeft = '140px';
+            }
+        });
+
+        // 工具切换
+        function switchTool(tool) {
+            currentTool = tool;
+            
+            // 移除所有工具的 active 状态
+            btnBrush.classList.remove('active');
+            btnEraser.classList.remove('active');
+            btnAreaEraser.classList.remove('active');
+            
+            // 更新底部信息栏
+            const toolDisplay = document.getElementById('currentToolDisplay');
+            const sizeDisplay = document.getElementById('currentSizeDisplay');
+            
+            // 设置当前工具为 active
+            if (tool === 'brush') {
+                btnBrush.classList.add('active');
+                canvas.style.cursor = 'crosshair';
+                sizePanelTitle.textContent = '画笔大小';
+                updateSliderDot(currentSize);
+                toolDisplay.textContent = '画笔';
+                sizeDisplay.textContent = currentSize;
+            } else if (tool === 'eraser') {
+                btnEraser.classList.add('active');
+                canvas.style.cursor = 'cell';
+                sizePanelTitle.textContent = '橡皮擦大小';
+                updateSliderDot(eraserSize);
+                toolDisplay.textContent = '橡皮擦';
+                sizeDisplay.textContent = eraserSize;
+            } else if (tool === 'area-eraser') {
+                btnAreaEraser.classList.add('active');
+                canvas.style.cursor = 'crosshair';
+                sizePanel.classList.remove('active');
+                toolDisplay.textContent = '区域擦除';
+                sizeDisplay.textContent = '-';
+            }
+            
+            updateSizePresets();
+        }
+
+        btnBrush.addEventListener('click', () => switchTool('brush'));
+        btnEraser.addEventListener('click', () => switchTool('eraser'));
+        btnAreaEraser.addEventListener('click', () => switchTool('area-eraser'));
+
+        // 颜色面板显示/隐藏
+        btnColor.addEventListener('click', () => {
+            colorPanel.classList.toggle('active');
+            sizePanel.classList.remove('active');
+        });
+
+        // 大小面板显示/隐藏
+        btnSize.addEventListener('click', () => {
+            if (currentTool === 'area-eraser') {
+                // 区域擦除不需要大小面板
+                return;
+            }
+            sizePanel.classList.toggle('active');
+            colorPanel.classList.remove('active');
+        });
+
+        // 点击其他地方关闭面板
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.color-panel') && !e.target.closest('#btnColor')) {
+                colorPanel.classList.remove('active');
+            }
+            if (!e.target.closest('.size-panel') && !e.target.closest('#btnSize')) {
+                sizePanel.classList.remove('active');
+            }
+        });
+
+        // 颜色选择
+        palette.addEventListener('click', (e) => {
+            if (e.target.classList.contains('color-swatch')) {
+                document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+                e.target.classList.add('active');
+                currentColor = e.target.dataset.color;
+                document.getElementById('currentColorDisplay').textContent = currentColor;
+                btnColor.style.color = currentColor;
+            }
+        });
+
+        // 自定义颜色选择器
+        document.getElementById('colorPicker').addEventListener('input', (e) => {
+            currentColor = e.target.value;
+            document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+            document.getElementById('currentColorDisplay').textContent = currentColor;
+            btnColor.style.color = currentColor;
+        });
+
+        // 圆形径向滑块
+        const radialSlider = document.getElementById('radialSlider');
+        const sliderDot = document.getElementById('sliderDot');
+        const sizeValue = document.getElementById('sizeValue');
+        let isDragging = false;
+
+        function updateSliderDot(size) {
+            const percentage = (size - 1) / 49; // 1-50 的百分比
+            const angle = percentage * 360 - 90; // -90 度从顶部开始
+            const radian = angle * (Math.PI / 180);
+            const radius = 60; // 滑动轨道半径
+            const centerX = 70;
+            const centerY = 70;
+            
+            const x = centerX + radius * Math.cos(radian) - 8;
+            const y = centerY + radius * Math.sin(radian) - 8;
+            
+            sliderDot.style.left = x + 'px';
+            sliderDot.style.top = y + 'px';
+            sizeValue.textContent = size;
+        }
+
+        // 初始化滑块位置
+        updateSliderDot(currentSize);
+
+        radialSlider.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            handleSliderMove(e);
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                handleSliderMove(e);
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        function handleSliderMove(e) {
+            const rect = radialSlider.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            const angle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+            let percentage = (angle + Math.PI / 2) / (2 * Math.PI);
+            if (percentage < 0) percentage += 1;
+            
+            const size = Math.round(percentage * 49 + 1);
+            const clampedSize = Math.min(50, Math.max(1, size));
+            
+            // 根据当前工具更新大小
+            if (currentTool === 'eraser') {
+                eraserSize = clampedSize;
+            } else {
+                currentSize = clampedSize;
+            }
+            
+            updateSliderDot(clampedSize);
+            updateSizePresets();
+            updateSizeDisplay();
+        }
+
+        // 预设大小按钮
+        document.querySelectorAll('.size-preset-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const size = parseInt(btn.dataset.size);
+                
+                // 根据当前工具更新大小
+                if (currentTool === 'eraser') {
+                    eraserSize = size;
+                } else {
+                    currentSize = size;
+                }
+                
+                updateSliderDot(size);
+                updateSizePresets();
+                updateSizeDisplay();
+            });
+        });
+
+        function updateSizePresets() {
+            const currentActiveSize = currentTool === 'eraser' ? eraserSize : currentSize;
+            document.querySelectorAll('.size-preset-btn').forEach(btn => {
+                btn.classList.toggle('active', parseInt(btn.dataset.size) === currentActiveSize);
+            });
+        }
+        
+        function updateSizeDisplay() {
+            const sizeDisplay = document.getElementById('currentSizeDisplay');
+            if (currentTool === 'eraser') {
+                sizeDisplay.textContent = eraserSize;
+            } else if (currentTool === 'brush') {
+                sizeDisplay.textContent = currentSize;
+            } else {
+                sizeDisplay.textContent = '-';
+            }
+        }
+
+        // 绘画功能
+        function startDrawing(e) {
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            lastX = e.clientX - rect.left;
+            lastY = e.clientY - rect.top;
+            
+            // 区域擦除功能
+            if (currentTool === 'area-eraser') {
+                isAreaSelecting = true;
+                areaStartX = lastX;
+                areaStartY = lastY;
+            }
+        }
+
+        function draw(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            // 更新坐标显示
+            document.getElementById('coords').textContent = `${Math.round(x)}, ${Math.round(y)}`;
+            
+            // 区域选择擦除
+            if (currentTool === 'area-eraser' && isAreaSelecting) {
+                areaEndX = x;
+                areaEndY = y;
+                drawAreaSelection();
+                return;
+            }
+            
+            if (!isDrawing) return;
+
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(x, y);
+            
+            if (currentTool === 'eraser') {
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = eraserSize;
+            } else {
+                ctx.strokeStyle = currentColor;
+                ctx.lineWidth = currentSize;
+            }
+            
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+
+            lastX = x;
+            lastY = y;
+        }
+
+        // 绘制区域选择框
+        function drawAreaSelection() {
+            // 临时清除画布内容，绘制选择框
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            // 复制当前画布内容
+            tempCtx.drawImage(canvas, 0, 0);
+            
+            // 清除画布并恢复内容
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(tempCanvas, 0, 0);
+            
+            // 绘制选择框
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.strokeRect(
+                Math.min(areaStartX, areaEndX),
+                Math.min(areaStartY, areaEndY),
+                Math.abs(areaEndX - areaStartX),
+                Math.abs(areaEndY - areaStartY)
+            );
+            ctx.setLineDash([]);
+            
+            // 填充半透明背景
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.1)';
+            ctx.fillRect(
+                Math.min(areaStartX, areaEndX),
+                Math.min(areaStartY, areaEndY),
+                Math.abs(areaEndX - areaStartX),
+                Math.abs(areaEndY - areaStartY)
+            );
+        }
+
+        function stopDrawing() {
+            if (isDrawing) {
+                isDrawing = false;
+                
+                // 执行区域擦除
+                if (currentTool === 'area-eraser' && isAreaSelecting) {
+                    isAreaSelecting = false;
+                    
+                    // 计算区域边界
+                    const minX = Math.min(areaStartX, areaEndX);
+                    const minY = Math.min(areaStartY, areaEndY);
+                    const width = Math.abs(areaEndX - areaStartX);
+                    const height = Math.abs(areaEndY - areaStartY);
+                    
+                    if (width > 5 && height > 5) { // 最小选择区域
+                        // 恢复之前的内容
+                        const img = new Image();
+                        img.src = history[historyStep];
+                        img.onload = () => {
+                            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                            ctx.drawImage(img, 0, 0);
+                            
+                            // 擦除选定区域
+                            ctx.fillStyle = '#ffffff';
+                            ctx.fillRect(minX, minY, width, height);
+                            
+                            saveHistory();
+                        };
+                    } else {
+                        // 选择区域太小，恢复画布
+                        const img = new Image();
+                        img.src = history[historyStep];
+                        img.onload = () => {
+                            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                            ctx.drawImage(img, 0, 0);
+                        };
+                    }
+                } else {
+                    saveHistory();
+                }
+            }
+        }
+
+        // Canvas 事件
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+
+        // 鼠标移动时更新坐标
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            document.getElementById('coords').textContent = `${Math.round(x)}, ${Math.round(y)}`;
+        });
+
+        // 撤销
+        document.getElementById('btnUndo').addEventListener('click', () => {
+            if (historyStep > 0) {
+                redoHistory.push(history[historyStep]);
+                historyStep--;
+                const img = new Image();
+                img.src = history[historyStep];
+                img.onload = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0);
+                };
+                updateUndoRedoButtons();
+            }
+        });
+
+        // 重做
+        document.getElementById('btnRedo').addEventListener('click', () => {
+            if (redoHistory.length > 0) {
+                const redoState = redoHistory.pop();
+                history.push(redoState);
+                historyStep++;
+                const img = new Image();
+                img.src = redoState;
+                img.onload = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0);
+                };
+                updateUndoRedoButtons();
+            }
+        });
+
+        // 清空
+        document.getElementById('btnClear').addEventListener('click', () => {
+            if (confirm('确定要清空画布吗？')) {
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                saveHistory();
+            }
+        });
+
+        // 保存
+        document.getElementById('btnSave').addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = `drawing-${Date.now()}.png`;
+            link.href = canvas.toDataURL();
+            link.click();
+        });
+
+        // 键盘快捷键
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                if (e.key === 'z') {
+                    e.preventDefault();
+                    document.getElementById('btnUndo').click();
+                } else if (e.key === 'y') {
+                    e.preventDefault();
+                    document.getElementById('btnRedo').click();
+                } else if (e.key === 's') {
+                    e.preventDefault();
+                    document.getElementById('btnSave').click();
+                }
+            }
+            
+            // 数字键快速切换大小
+            if (e.key >= '1' && e.key <= '6') {
+                const sizes = [2, 5, 10, 20, 30, 50];
+                const index = parseInt(e.key) - 1;
+                currentSize = sizes[index];
+                updateSliderDot(currentSize);
+                updateSizePresets();
+            }
+        });
+
+        // 触摸支持
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            lastX = touch.clientX - rect.left;
+            lastY = touch.clientY - rect.top;
+            isDrawing = true;
+            startCanvasSync(); // 移动端开始同步
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (!isDrawing) return;
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const x = touch.clientX - rect.left;
+            const y = touch.clientY - rect.top;
+
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(x, y);
+            ctx.strokeStyle = currentTool === 'eraser' ? '#ffffff' : currentColor;
+            ctx.lineWidth = currentSize;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+
+            lastX = x;
+            lastY = y;
+        });
+
+        canvas.addEventListener('touchend', (e) => {
+            stopDrawing();
+            stopCanvasSync(); // 移动端停止同步
+            sendCanvasData(); // 发送最后一次数据
+        });
+
+        // 阻止画布区域的触摸移动触发浏览器手势（前进/后退、下拉刷新等）
+        document.addEventListener('touchmove', (e) => {
+            if (e.target === canvas || canvas.contains(e.target)) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        // ===== 实时评论弹幕系统 =====
+        const barrageContainer = document.getElementById('barrageContainer');
+        const barrageItems = [];
+        const maxBarrageItems = 5;
+
+        // 模拟评论数据
+        const players = [
+            { name: '小红', avatar: '红', color: '#ef4444' },
+            { name: '小刚', avatar: '刚', color: '#f97316' },
+            { name: '小李', avatar: '李', color: '#eab308' },
+            { name: '小王', avatar: '王', color: '#22c55e' },
+            { name: '小张', avatar: '张', color: '#3b82f6' },
+            { name: '小赵', avatar: '赵', color: '#8b5cf6' },
+            { name: '小孙', avatar: '孙', color: '#ec4899' },
+            { name: '小钱', avatar: '钱', color: '#14b8a6' }
+        ];
+
+        const comments = [
+            '是水果吗？',
+            '看起来像个圆的',
+            '是不是红色的？',
+            '我猜是苹果！',
+            '好像是个球',
+            '是吃的吗？',
+            '是不是动物？',
+            '颜色很鲜艳',
+            '好像在发光',
+            '是不是植物？',
+            '形状很独特',
+            '这个有点难',
+            '我快想到了！',
+            '是不是香蕉？',
+            '好像有叶子',
+            '是橙子吗？'
+        ];
+
+        // 创建弹幕元素
+        function createBarrage(player, comment) {
+            const barrage = document.createElement('div');
+            barrage.className = 'barrage-item';
+            barrage.style.borderLeftColor = player.color;
+            barrage.style.borderLeftWidth = '3px';
+
+            const avatar = document.createElement('div');
+            avatar.className = 'barrage-avatar';
+            
+            // 优化弹幕头像显示：使用玩家选择的随机头像 (SVG)
+            if (player.avatar && player.avatar.includes('<svg')) {
+                avatar.innerHTML = player.avatar;
+                avatar.style.background = 'transparent';
+                avatar.style.overflow = 'hidden';
+            } else {
+                avatar.style.background = `linear-gradient(135deg, ${player.color}, ${adjustColor(player.color, 30)})`;
+                avatar.textContent = player.avatar;
+            }
+
+            const content = document.createElement('div');
+            content.className = 'barrage-content';
+
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'barrage-name';
+            nameSpan.textContent = player.name;
+
+            content.appendChild(nameSpan);
+            content.appendChild(document.createTextNode(`: ${comment}`));
+
+            barrage.appendChild(avatar);
+            barrage.appendChild(content);
+
+            return barrage;
+        }
+
+        // 调整颜色亮度
+        function adjustColor(color, amount) {
+            const hex = color.replace('#', '');
+            const r = Math.max(0, Math.min(255, parseInt(hex.substr(0, 2), 16) + amount));
+            const g = Math.max(0, Math.min(255, parseInt(hex.substr(2, 2), 16) + amount));
+            const b = Math.max(0, Math.min(255, parseInt(hex.substr(4, 2), 16) + amount));
+            return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+        }
+
+        // 添加弹幕到容器
+        function addBarrage(comment, playerName = '匿名', avatarColor = '#6366f1', playerAvatar = null) {
+            if (barrageItems.length >= maxBarrageItems) {
+                // 移除最旧的弹幕
+                const oldest = barrageItems.shift();
+                if (oldest.parentNode) {
+                    oldest.parentNode.removeChild(oldest);
+                }
+            }
+
+            const initial = playerName ? playerName[0] : '?';
+            const player = {
+                name: playerName,
+                avatar: playerAvatar || initial, // 优先使用传入的头像 SVG
+                color: avatarColor
+            };
+            
+            const barrage = createBarrage(player, comment);
+
+            // 设置随机垂直位置
+            const randomTop = Math.floor(Math.random() * 40);
+            barrage.style.top = `${randomTop}px`;
+
+            barrageContainer.appendChild(barrage);
+            barrageItems.push(barrage);
+
+            // 10秒后自动移除
+            setTimeout(() => {
+                const index = barrageItems.indexOf(barrage);
+                if (index > -1) {
+                    barrageItems.splice(index, 1);
+                }
+                if (barrage.parentNode) {
+                    barrage.parentNode.removeChild(barrage);
+                }
+            }, 10000);
+        }
+
+        // 更新绘画者顶部倒计时显示
+        function updatePainterTimer(seconds) {
+            if (!currentTargetTimer) return;
+            currentTargetTimer.textContent = seconds;
+            if (seconds <= 10) {
+                currentTargetTimer.classList.add('warning');
+            } else {
+                currentTargetTimer.classList.remove('warning');
+            }
+        }
+
+        // 模拟弹幕流已禁用，改为接收真实消息
+        function startBarrageStream() {
+            // 已弃用模拟逻辑
+        }
+
+        // ===== 绘画目标选择系统 =====
+        const targetModal = document.getElementById('targetModal');
+        const targetGrid = document.getElementById('targetGrid');
+        const stepDot1 = document.getElementById('stepDot1');
+        const stepDot2 = document.getElementById('stepDot2');
+        const stepDot3 = document.getElementById('stepDot3');
+        const btnNext = document.getElementById('btnNext');
+        const btnPrev = document.getElementById('btnPrev');
+        const modalSubtitle = document.querySelector('.target-modal-subtitle');
+        const currentTarget = document.getElementById('currentTarget');
+        const currentTargetText = document.getElementById('currentTargetText');
+        const currentTargetTimer = document.getElementById('currentTargetTimer');
+
+        let currentStep = 1;
+        let selectedCategory = null;
+        let selectedItem = null;
+
+        // 绘画目标数据
+        const categories = [
+            { id: 'fruit', name: '水果', icon: '🍎', items: ['苹果', '香蕉', '橙子', '草莓', '西瓜', '葡萄'] },
+            { id: 'animal', name: '动物', icon: '🐱', items: ['猫', '狗', '鸟', '鱼', '兔子', '蝴蝶'] },
+            { id: 'object', name: '日常用品', icon: '📱', items: ['手机', '杯子', '书本', '椅子', '钥匙', '眼镜'] },
+            { id: 'food', name: '美食', icon: '🍕', items: ['披萨', '蛋糕', '面条', '汉堡', '冰淇淋', '饺子'] },
+            { id: 'nature', name: '自然', icon: '🌳', items: ['太阳', '月亮', '星星', '彩虹', '山峰', '河流'] },
+            { id: 'vehicle', name: '交通工具', icon: '🚗', items: ['汽车', '飞机', '轮船', '火车', '自行车', '摩托车'] }
+        ];
+
+        // 渲染分类网格
+        function renderCategories() {
+            targetGrid.innerHTML = '';
+            categories.forEach(cat => {
+                const card = document.createElement('div');
+                card.className = 'target-card';
+                card.dataset.categoryId = cat.id;
+                card.innerHTML = `
+                    <div class="target-card-icon">${cat.icon}</div>
+                    <div class="target-card-name">${cat.name}</div>
+                `;
+                card.addEventListener('click', () => selectCategory(cat.id));
+                targetGrid.appendChild(card);
+            });
+        }
+
+        // 选择分类
+        function selectCategory(categoryId) {
+            selectedCategory = categories.find(c => c.id === categoryId);
+            
+            // 更新选中状态
+            document.querySelectorAll('.target-card').forEach(card => {
+                card.classList.remove('selected');
+                if (card.dataset.categoryId === categoryId) {
+                    card.classList.add('selected');
+                }
+            });
+
+            btnNext.disabled = false;
+        }
+
+        // 渲染物品网格
+        function renderItems() {
+            if (!selectedCategory) return;
+
+            targetGrid.innerHTML = '';
+            selectedCategory.items.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'target-card';
+                card.dataset.itemName = item;
+                card.innerHTML = `
+                    <div class="target-card-icon">${selectedCategory.icon}</div>
+                    <div class="target-card-name">${item}</div>
+                `;
+                card.addEventListener('click', () => selectItem(item));
+                targetGrid.appendChild(card);
+            });
+        }
+
+        // 选择物品
+        function selectItem(itemName) {
+            selectedItem = itemName;
+
+            // 更新选中状态
+            document.querySelectorAll('.target-card').forEach(card => {
+                card.classList.remove('selected');
+                if (card.dataset.itemName === itemName) {
+                    card.classList.add('selected');
+                }
+            });
+
+            btnNext.disabled = false;
+        }
+
+        // 渲染确认步骤
+        function renderConfirmation() {
+            if (!selectedCategory || !selectedItem) return;
+
+            targetGrid.innerHTML = `
+                <div class="target-card selected" style="grid-column: 1 / -1; max-width: 300px; margin: 0 auto;">
+                    <div class="target-card-icon" style="font-size: 48px;">${selectedCategory.icon}</div>
+                    <div class="target-card-name" style="font-size: 20px; margin-top: 12px;">${selectedItem}</div>
+                    <div style="margin-top: 8px; color: var(--text-secondary); font-size: 12px;">
+                        分类: ${selectedCategory.name}
+                    </div>
+                </div>
+            `;
+            btnNext.textContent = '开始绘画';
+            btnNext.disabled = false;
+        }
+
+        // 更新步骤指示器
+        function updateStepIndicators() {
+            stepDot1.className = `step-dot ${currentStep === 1 ? 'active' : currentStep > 1 ? 'completed' : ''}`;
+            stepDot2.className = `step-dot ${currentStep === 2 ? 'active' : currentStep > 2 ? 'completed' : ''}`;
+            stepDot3.className = `step-dot ${currentStep === 3 ? 'active' : ''}`;
+        }
+
+        // 下一步
+        btnNext.addEventListener('click', () => {
+            if (currentStep === 1 && selectedCategory) {
+                currentStep = 2;
+                modalSubtitle.textContent = '第2步：选择具体物品';
+                renderItems();
+                btnPrev.style.display = 'block';
+                btnNext.disabled = true;
+                updateStepIndicators();
+            } else if (currentStep === 2 && selectedItem) {
+                currentStep = 3;
+                modalSubtitle.textContent = '第3步：确认绘画目标';
+                renderConfirmation();
+                updateStepIndicators();
+            } else if (currentStep === 3) {
+                // 关闭弹窗，开始绘画
+                targetModal.classList.remove('show');
+                currentTarget.classList.add('show');
+                currentTargetText.textContent = `正在绘画: ${selectedItem}`;
+                
+                // 将选择的词语同步给服务器
+                if (socketClient && socketClient.roomCode) {
+                    socketClient.selectWord(selectedItem);
+                }
+                
+                // 启动弹幕流
+                setTimeout(startBarrageStream, 1000);
+            }
+        });
+
+        // 上一步
+        btnPrev.addEventListener('click', () => {
+            if (currentStep === 2) {
+                currentStep = 1;
+                modalSubtitle.textContent = '第1步：选择一个分类';
+                renderCategories();
+                btnPrev.style.display = 'none';
+                btnNext.disabled = selectedCategory === null;
+                selectedItem = null;
+                updateStepIndicators();
+            } else if (currentStep === 3) {
+                currentStep = 2;
+                modalSubtitle.textContent = '第2步：选择具体物品';
+                renderItems();
+                btnNext.textContent = '下一步';
+                btnNext.disabled = selectedItem === null;
+                updateStepIndicators();
+            }
+        });
+
+        // 当前流程由服务端自动分配词汇，不再需要页面加载时弹出选择面板
+        // 如需恢复手动选词，可重新启用下面的逻辑
+        // window.addEventListener('load', () => {
+        //     setTimeout(() => {
+        //         targetModal.classList.add('show');
+        //         renderCategories();
+        //     }, 500);
+        // });
+    </script>
+
+    <!-- Socket.io -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/socket-client.js"></script>
+    <script src="js/game-state.js"></script>
+    <script src="js/bgm-manager.js"></script>
+    <script>
+        // 初始化 BGM 管理器
+        window.addEventListener('DOMContentLoaded', () => {
+            window.initBGM('bgm');
+        });
+
+        // ===== Socket.io 集成 =====
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomCode = urlParams.get('roomCode');
+        const roomName = urlParams.get('roomName') || '游戏房间';
+        const playerName = urlParams.get('playerName');
+        const playerAvatar = urlParams.get('playerAvatar');
+        let currentWord = null;
+
+        // 生成头像颜色
+        function getAvatarColor(name) {
+            const colors = [
+                'linear-gradient(135deg, #6366F1, #8B5CF6)',
+                'linear-gradient(135deg, #FB923C, #F97316)',
+                'linear-gradient(135deg, #22C55E, #16A34A)',
+                'linear-gradient(135deg, #FBBF24, #F59E0B)',
+                'linear-gradient(135deg, #EF4444, #DC2626)',
+                'linear-gradient(135deg, #EC4899, #F472B6)'
+            ];
+            if (!name) return colors[0];
+            let hash = 0;
+            for (let i = 0; i < name.length; i++) {
+                hash = name.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            return colors[Math.abs(hash) % colors.length];
+        }
+
+        let currentPlayers = [];
+        let hasGameEnded = false; // 游戏结束弹窗显示后，不再自动跳转
+        let lastRoomStatus = ''; // 用于检测游戏结束状态流转
+
+        async function initSocket() {
+            try {
+                if (!roomCode || !playerName) {
+                    console.error('缺少房间代码或玩家名称');
+                    return;
+                }
+
+                await socketClient.connect();
+                console.log('绘画者已连接到服务器');
+
+                // 绘画者也需要加入房间以同步状态
+                const joinResponse = await socketClient.joinRoom(roomCode, playerName, null, playerAvatar);
+                console.log('绘画者已加入房间:', socketClient.roomCode);
+                if (joinResponse && joinResponse.room) {
+                    currentPlayers = joinResponse.room.players || [];
+                    lastRoomStatus = joinResponse.room.status || '';
+
+                    // 状态机校验：确保当前页面与房间状态匹配
+                    const shouldStay = GameState.enforce(
+                        joinResponse.room,
+                        socketClient.playerId,
+                        'painter',
+                        {
+                            roomCode: roomCode,
+                            roomName: roomName || '',
+                            playerName: playerName,
+                            playerAvatar: playerAvatar || ''
+                        }
+                    );
+                    if (!shouldStay) return;
+                }
+
+                // 如果用户已经在连接完成前选择了词语，同步给服务器
+                if (selectedItem) {
+                    console.log('同步已选词语给服务器:', selectedItem);
+                    socketClient.selectWord(selectedItem);
+                }
+
+                // 监听房间数据更新
+                socketClient.on('roomUpdate', (room) => {
+                    currentPlayers = room.players || [];
+                    const newStatus = room.status || '';
+
+                    // 若 roomUpdate 先于 gameEnded 到达，检测到 playing -> finished/waiting 时主动展示结算弹窗
+                    if (!hasGameEnded && lastRoomStatus === 'playing' && (newStatus === 'finished' || newStatus === 'waiting')) {
+                        hasGameEnded = true;
+                        const rankings = (room.players || []).sort((a, b) => (b.score || 0) - (a.score || 0)).map((p, i) => ({
+                            rank: i + 1,
+                            name: p.name,
+                            avatar: p.avatar,
+                            score: p.score || 0,
+                            isHost: p.isHost
+                        }));
+                        showGameEndRankings(rankings);
+                        lastRoomStatus = newStatus;
+                        return;
+                    }
+                    lastRoomStatus = newStatus;
+
+                    // 游戏结束弹窗显示期间，不自动跳转，等待用户手动返回房间
+                    if (hasGameEnded) return;
+
+                    // 状态机校验：房间状态变化时自动修正页面
+                    const shouldStay = GameState.enforce(
+                        room,
+                        socketClient.playerId,
+                        'painter',
+                        {
+                            roomCode: roomCode,
+                            roomName: roomName || '',
+                            playerName: playerName,
+                            playerAvatar: playerAvatar || ''
+                        }
+                    );
+                    if (!shouldStay) return;
+                });
+
+                // 监听猜词正确：不显示答案，只提示有人猜对
+                socketClient.on('guessCorrect', ({ playerId, playerName, playerAvatar, score }) => {
+                    showGuessResult(playerName, null, true, score);
+                    // 同步到弹幕
+                    addBarrage(`${playerName} 猜对了！`, playerName, getAvatarColor(playerName), playerAvatar);
+                });
+
+                // 监听猜词尝试
+                socketClient.on('guessAttempt', ({ playerName, playerAvatar, guess, isCorrect }) => {
+                    if (!isCorrect) {
+                        addBarrage(guess, playerName, getAvatarColor(playerName), playerAvatar);
+                    }
+                });
+
+                // 监听聊天消息
+                socketClient.on('chatMessage', ({ playerName, playerAvatar, message }) => {
+                    addBarrage(message, playerName, getAvatarColor(playerName), playerAvatar);
+                });
+
+                // 监听绘画者专用词汇（只有绘画者能收到）
+                socketClient.on('painterWord', ({ word, category, hint }) => {
+                    currentWord = word;
+                    const targetTextEl = document.getElementById('currentTargetText');
+                    if (targetTextEl) {
+                        targetTextEl.textContent = `正在绘画: ${word}`;
+                    }
+                    if (currentTarget) {
+                        currentTarget.classList.add('show');
+                    }
+                    if (hint) {
+                        const hintEl = document.querySelector('.current-target-hint');
+                        if (hintEl) hintEl.textContent = `分类：${category || ''} | 提示：${hint}`;
+                    }
+                });
+
+                // 监听回合开始（绘画者切换）
+                socketClient.on('roundStarted', ({ round, totalRounds, painterId, timer }) => {
+                    console.log('回合开始:', round, '绘画者:', painterId);
+
+                    // 判断当前用户是否还是绘画者
+                    if (painterId !== socketClient.socket.id) {
+                        console.log('绘画者已切换，跳转到竞猜者页面');
+                        // 如果不是绘画者了，跳转到竞猜者页面
+                        const gameParams = new URLSearchParams({
+                            roomCode: roomCode,
+                            roomName: roomName || '游戏房间',
+                            playerName: playerName,
+                            playerAvatar: playerAvatar || '',
+                            round: round,
+                            totalRounds: totalRounds || 5
+                        });
+                        window.isRoleSwitching = true;
+                        window.location.replace(`guesser.html?${gameParams.toString()}`);
+                    } else {
+                        console.log('继续作为绘画者');
+                        // 确保绘画目标浮层可见
+                        if (currentTarget) {
+                            currentTarget.classList.add('show');
+                        }
+                        // 更新回合信息显示
+                        const roundBadge = document.getElementById('roundBadge');
+                        if (roundBadge) {
+                            roundBadge.textContent = `第 ${round} / ${totalRounds || 5} 回合`;
+                        }
+                        if (timer !== undefined) {
+                            updatePainterTimer(timer);
+                        }
+                    }
+                });
+
+                // 监听服务端权威计时同步
+                socketClient.on('timerUpdate', ({ remainingTime }) => {
+                    updatePainterTimer(remainingTime);
+                });
+
+                // 监听回合结束
+                socketClient.on('roundEnded', ({ message, word }) => {
+                    updatePainterTimer(0);
+                    alert(`${message || '本轮结束！'} ${word || ''}`);
+                });
+
+                // 监听游戏结束
+                socketClient.on('gameEnded', ({ room, rankings }) => {
+                    hasGameEnded = true;
+                    showGameEndRankings(rankings || (room && room.players));
+                });
+
+                // 监听房间销毁
+                socketClient.on('roomDestroyed', ({ message }) => {
+                    alert(message || '房主已离开，房间已销毁');
+                    window.location.replace('lobby.html');
+                });
+
+            } catch (error) {
+                console.error('连接失败:', error);
+            }
+        }
+
+        // 显示猜词结果
+        function showGuessResult(playerName, guess, correct, score) {
+            const resultDiv = document.createElement('div');
+            resultDiv.className = 'guess-result';
+            const guessText = guess ? `猜对了: ${guess}` : '猜对了';
+            resultDiv.innerHTML = `
+                <div class="guess-result-content ${correct ? 'correct' : 'wrong'}">
+                    <span class="player-name">${playerName}</span>
+                    <span class="guess-text">${guessText}</span>
+                    <span class="score">+${score}分</span>
+                </div>
+            `;
+            document.body.appendChild(resultDiv);
+
+            setTimeout(() => {
+                resultDiv.remove();
+            }, 3000);
+        }
+
+        // 显示游戏结束排行榜
+        function showGameEndRankings(rankings) {
+            const overlay = document.getElementById('gameEndOverlay');
+            const list = document.getElementById('rankingList');
+            if (!overlay || !list) return;
+
+            const players = Array.isArray(rankings) && rankings.length > 0 && rankings[0].score !== undefined
+                ? rankings
+                : (rankings || []).sort((a, b) => (b.score || 0) - (a.score || 0)).map((p, i) => ({
+                    rank: i + 1,
+                    name: p.name,
+                    avatar: p.avatar,
+                    score: p.score || 0,
+                    isHost: p.isHost
+                }));
+
+            list.innerHTML = '';
+            players.forEach((player, index) => {
+                const rank = player.rank || index + 1;
+                let topClass = '';
+                let numClass = 'normal';
+                if (rank === 1) { topClass = 'top1'; numClass = 'gold'; }
+                else if (rank === 2) { topClass = 'top2'; numClass = 'silver'; }
+                else if (rank === 3) { topClass = 'top3'; numClass = 'bronze'; }
+
+                const avatarHtml = player.avatar && player.avatar.includes('<svg')
+                    ? player.avatar
+                    : `<div class="ranking-avatar-fallback">${player.name ? player.name[0] : '?'}</div>`;
+
+                const hostBadge = player.isHost ? '<span class="ranking-host">房主</span>' : '';
+
+                const item = document.createElement('div');
+                item.className = `ranking-item ${topClass}`;
+                item.innerHTML = `
+                    <div class="ranking-num ${numClass}">${rank}</div>
+                    <div class="ranking-avatar">${avatarHtml}</div>
+                    <div class="ranking-info">
+                        <div class="ranking-name">${player.name || '匿名'}${hostBadge}</div>
+                    </div>
+                    <div class="ranking-score">${player.score || 0}</div>
+                `;
+                list.appendChild(item);
+            });
+
+            overlay.classList.add('show');
+        }
+
+        // 返回房间
+        function backToRoom() {
+            const me = currentPlayers.find(p => p.id === socketClient.playerId);
+            const isHost = me ? me.isHost : false;
+            const params = new URLSearchParams({
+                roomCode: roomCode,
+                roomName: roomName || '游戏房间',
+                playerName: playerName,
+                playerAvatar: playerAvatar || '',
+                status: '等待中',
+                isHost: isHost ? 'true' : 'false'
+            });
+            window.isRoleSwitching = true;
+            window.location.replace(`room-lobby.html?${params.toString()}`);
+        }
+
+        document.getElementById('btnBackToRoom').addEventListener('click', backToRoom);
+
+        // 发送画布数据
+        function sendCanvasData() {
+            const imageData = canvas.toDataURL('image/png', 0.5);
+            socketClient.sendCanvasUpdate(imageData, roomCode);
+        }
+
+        // 定时发送画布数据（降低频率）
+        let canvasSendInterval = null;
+        function startCanvasSync() {
+            if (canvasSendInterval) return;
+            canvasSendInterval = setInterval(() => {
+                sendCanvasData();
+            }, 200); // 每200ms发送一次
+        }
+
+        function stopCanvasSync() {
+            if (canvasSendInterval) {
+                clearInterval(canvasSendInterval);
+                canvasSendInterval = null;
+            }
+        }
+
+        // 监听绘制事件，触发同步
+        canvas.addEventListener('mouseup', sendCanvasData);
+        canvas.addEventListener('mouseleave', sendCanvasData);
+
+        // 初始化连接
+        initSocket();
+
+        // 绘画开始时启动同步
+        canvas.addEventListener('mousedown', () => {
+            startCanvasSync();
+        });
+
+        // 绘画结束时停止同步
+        canvas.addEventListener('mouseup', () => {
+            stopCanvasSync();
+            sendCanvasData(); // 最后发送一次完整数据
+        });
+
+        // ===== 防误触退出功能 =====
+        window.addEventListener('beforeunload', (e) => {
+            if (window.isRoleSwitching) {
+                return;
+            }
+            if (socketClient.socket && socketClient.socket.connected) {
+                e.preventDefault();
+                e.returnValue = '你正在绘画中，离开将导致本局游戏异常，确定要退出吗？';
+                return e.returnValue;
+            }
+        });
+    </script>
+
+    <!-- 背景音乐 -->
+    <audio id="bgm" loop>
+        <source src="background_music/Game.mp3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        // 初始化 BGM 管理器已在上方通过 window.initBGM 统一处理
+    </script>
+</body>
+</html>

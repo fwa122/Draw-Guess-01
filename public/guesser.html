@@ -1,0 +1,1864 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>你画我猜 - 竞猜者</title>
+    <link rel="stylesheet" href="css/common.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #F8F9FC;
+            --bg-secondary: #FFFFFF;
+            --bg-card: #F1F5F9;
+            --bg-hover: #E2E8F0;
+            --border: #E2E8F0;
+            --text-primary: #1E293B;
+            --text-secondary: #64748B;
+            --text-muted: #94A3B8;
+            --accent: #6366F1;
+            --accent-light: #818CF8;
+            --accent-bg: rgba(99, 102, 241, 0.08);
+            --green: #22C55E;
+            --green-bg: rgba(34, 197, 94, 0.08);
+            --yellow: #F59E0B;
+            --red: #EF4444;
+            --radius-sm: 10px;
+            --radius-md: 14px;
+            --radius-lg: 18px;
+            --radius-pill: 50px;
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08);
+            --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: var(--bg-primary);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            color: var(--text-primary);
+            overflow: hidden;
+        }
+
+        /* ===== 顶部状态栏 ===== */
+        .top-bar {
+            height: 60px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 28px;
+            flex-shrink: 0;
+            z-index: 10;
+        }
+
+        .game-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo svg {
+            width: 28px;
+            height: 28px;
+        }
+
+        .round-badge {
+            background: var(--accent-bg);
+            color: var(--accent);
+            padding: 6px 14px;
+            border-radius: var(--radius-pill);
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .player-avatar-mini {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-card);
+        }
+
+        .player-avatar-mini svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .rank-avatar-mini {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            overflow: hidden;
+            margin-right: 8px;
+            background: var(--bg-card);
+        }
+
+        .rank-avatar-mini svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .painter-avatar-wrapper {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            overflow: hidden;
+            background: var(--bg-card);
+            border: 2px solid var(--accent);
+        }
+
+        .painter-avatar-wrapper svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .painter-avatar-fallback, .rank-avatar-fallback {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--accent);
+            color: white;
+            font-weight: bold;
+        }
+
+        .painter-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .painter-name {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .painter-status {
+            font-size: 12px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .painter-status::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--green);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .timer {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text-primary);
+            font-variant-numeric: tabular-nums;
+            background: var(--bg-card);
+            padding: 8px 18px;
+            border-radius: var(--radius-pill);
+        }
+
+        .timer.warning {
+            color: var(--red);
+            background: rgba(239, 68, 68, 0.08);
+            animation: timerShake 0.5s ease-in-out infinite;
+        }
+
+        @keyframes timerShake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-2px); }
+            75% { transform: translateX(2px); }
+        }
+
+        /* ===== 主区域 ===== */
+        .main-area {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            padding: 16px;
+            gap: 16px;
+            min-height: 0;
+        }
+
+        /* ===== 左侧：画布 + 玩家 ===== */
+        .left-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-width: 0;
+            min-height: 0;
+        }
+
+        /* 画布区域 */
+        .canvas-area {
+            flex: 1;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-height: 0;
+        }
+
+        .canvas-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .canvas-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .hint-btn {
+            padding: 6px 14px;
+            border: none;
+            border-radius: var(--radius-pill);
+            background: var(--accent-bg);
+            color: var(--accent);
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            font-family: inherit;
+        }
+
+        .hint-btn:hover {
+            background: var(--accent);
+            color: white;
+        }
+
+        .canvas-wrapper {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            background: var(--bg-primary);
+            position: relative;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        #viewCanvas {
+            background: #ffffff;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow);
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: contain; /* 关键：保持比例 */
+        }
+
+        /* 提示弹窗 */
+        .hint-toast {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-10px);
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
+            color: white;
+            padding: 10px 24px;
+            border-radius: var(--radius-pill);
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: var(--shadow-lg);
+            opacity: 0;
+            visibility: hidden;
+            transition: var(--transition);
+            z-index: 10;
+            white-space: nowrap;
+        }
+
+        .hint-toast.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* ===== 玩家列表（横向可滑动） ===== */
+        .players-bar-wrapper {
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .players-bar {
+            display: flex;
+            gap: 10px;
+            padding: 4px 4px;
+            overflow-x: auto;
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            /* 隐藏滚动条但保留滚动功能 */
+        }
+
+        .players-bar::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* 滑动指示器 */
+        .scroll-hint {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 80px;
+            background: linear-gradient(to right, transparent, var(--bg-primary));
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 12px;
+            opacity: 1;
+            transition: opacity 0.3s;
+            z-index: 10;
+        }
+
+        .scroll-hint-left {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 80px;
+            background: linear-gradient(to left, transparent, var(--bg-primary));
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            padding-left: 12px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 10;
+        }
+
+        .scroll-hint.hidden,
+        .scroll-hint-left.hidden {
+            opacity: 0;
+        }
+
+        .scroll-hint svg,
+        .scroll-hint-left svg {
+            width: 24px;
+            height: 24px;
+            color: var(--accent);
+            animation: scrollBounce 1.5s ease-in-out infinite;
+            filter: drop-shadow(0 2px 4px rgba(99, 102, 241, 0.3));
+        }
+
+        .scroll-hint-left svg {
+            animation-direction: reverse;
+        }
+
+        @keyframes scrollBounce {
+            0%, 100% { transform: translateX(0); }
+            50% { transform: translateX(6px); }
+        }
+
+        /* 滑动按钮 */
+        .scroll-buttons {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            gap: 0;
+            z-index: 20;
+            pointer-events: all;
+        }
+
+        .scroll-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--bg-secondary);
+            border: 2px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+            color: var(--text-primary);
+        }
+
+        .scroll-btn:hover {
+            background: var(--accent);
+            color: white;
+            transform: scale(1.1);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+        }
+
+        .scroll-btn:active {
+            transform: scale(0.95);
+        }
+
+        .scroll-btn.disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .scroll-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .scroll-btn-left {
+            position: absolute;
+            left: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .scroll-btn-right {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .player-chip {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 16px;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-sm);
+            transition: var(--transition);
+            flex-shrink: 0;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .player-chip:hover {
+            box-shadow: var(--shadow);
+            transform: translateY(-1px);
+        }
+
+        .player-chip.painting {
+            box-shadow: 0 0 0 2px var(--accent);
+        }
+
+        .player-chip.me {
+            background: var(--accent-bg);
+        }
+
+        .player-chip.correct {
+            background: var(--green-bg);
+        }
+
+        .player-chip-left {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .player-chip-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 700;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .player-role-label {
+            font-size: 10px;
+            font-weight: 800;
+            color: white;
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
+            padding: 2px 8px;
+            border-radius: var(--radius-pill);
+            white-space: nowrap;
+            box-shadow: 0 2px 4px rgba(99, 102, 241, 0.3);
+            margin-top: -4px;
+            z-index: 2;
+        }
+
+        .player-chip-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .player-chip-name {
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .player-chip-score {
+            font-size: 11px;
+            color: var(--yellow);
+            font-weight: 600;
+        }
+
+        .player-chip-status {
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+
+        /* ===== 右侧：聊天竞猜 ===== */
+        .chat-panel {
+            width: 360px;
+            min-width: 320px;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        /* 排行榜 */
+        .leaderboard-mini {
+            padding: 12px 16px;
+            background: var(--bg-card);
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            flex-shrink: 0;
+        }
+
+        .leaderboard-mini::-webkit-scrollbar {
+            display: none;
+        }
+
+        .rank-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-pill);
+            font-size: 12px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .rank-num {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 700;
+            color: white;
+        }
+
+        .rank-num.gold { background: linear-gradient(135deg, #FBBF24, #F59E0B); }
+        .rank-num.silver { background: linear-gradient(135deg, #CBD5E1, #94A3B8); }
+        .rank-num.bronze { background: linear-gradient(135deg, #FB923C, #EA580C); }
+
+        .rank-name {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .rank-score {
+            color: var(--yellow);
+            font-weight: 700;
+        }
+
+        .chat-header {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .chat-title {
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        .online-count {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-height: 0;
+        }
+
+        .message {
+            display: flex;
+            gap: 10px;
+            animation: messageIn 0.3s ease-out;
+        }
+
+        @keyframes messageIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message-avatar {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .message-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .message-name {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 2px;
+            font-weight: 500;
+        }
+
+        .message-text {
+            font-size: 13px;
+            line-height: 1.5;
+            word-break: break-word;
+            color: var(--text-primary);
+        }
+
+        .message.guess-correct {
+            background: var(--green-bg);
+            border-radius: var(--radius-md);
+            padding: 10px 14px;
+        }
+
+        .message.guess-correct .message-text {
+            color: var(--green);
+            font-weight: 600;
+        }
+
+        .message.system {
+            align-self: center;
+            text-align: center;
+        }
+
+        .message.system .message-text {
+            font-size: 12px;
+            color: var(--text-muted);
+            background: var(--bg-card);
+            padding: 4px 14px;
+            border-radius: var(--radius-pill);
+            display: inline-block;
+        }
+
+        /* 输入区域 */
+        .chat-input-area {
+            padding: 14px 16px;
+            border-top: 1px solid var(--border);
+            background: var(--bg-primary);
+            flex-shrink: 0;
+            position: relative;
+            z-index: 10;
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .chat-input {
+            flex: 1;
+            height: 44px;
+            background: var(--bg-secondary);
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius-pill);
+            padding: 0 18px;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: inherit;
+            outline: none;
+            transition: var(--transition);
+        }
+
+        .chat-input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-bg);
+        }
+
+        .chat-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .btn-send {
+            width: 44px;
+            height: 44px;
+            border: none;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            flex-shrink: 0;
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+            pointer-events: auto; /* 确保可点击 */
+        }
+
+        .btn-send:hover {
+            transform: scale(1.08);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-send:active {
+            transform: scale(0.95);
+        }
+
+        .btn-send svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        /* 猜对弹窗 */
+        .correct-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.15);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+            opacity: 0;
+            visibility: hidden;
+            transition: var(--transition);
+        }
+
+        .correct-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .correct-popup {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-lg);
+            padding: 36px 48px;
+            text-align: center;
+            box-shadow: var(--shadow-lg);
+            transform: scale(0.9);
+            transition: var(--transition);
+        }
+
+        .correct-overlay.show .correct-popup {
+            transform: scale(1);
+        }
+
+        .correct-popup .icon {
+            width: 72px;
+            height: 72px;
+            margin: 0 auto 16px;
+            background: var(--green-bg);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .correct-popup .icon svg {
+            width: 36px;
+            height: 36px;
+            color: var(--green);
+        }
+
+        .correct-popup h2 {
+            font-size: 26px;
+            margin-bottom: 6px;
+            color: var(--text-primary);
+        }
+
+        .correct-popup p {
+            color: var(--text-secondary);
+            font-size: 15px;
+        }
+
+        /* ===== 游戏结束排行榜弹窗 ===== */
+        .game-end-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(30, 41, 59, 0.45);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 300;
+            opacity: 0;
+            visibility: hidden;
+            transition: var(--transition);
+        }
+
+        .game-end-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .game-end-popup {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-lg);
+            padding: 40px 48px;
+            width: 90%;
+            max-width: 520px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow-lg);
+            transform: scale(0.9);
+            transition: var(--transition);
+            text-align: center;
+        }
+
+        .game-end-overlay.show .game-end-popup {
+            transform: scale(1);
+        }
+
+        .game-end-popup h2 {
+            font-size: 26px;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .game-end-subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-bottom: 28px;
+        }
+
+        .ranking-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 28px;
+        }
+
+        .ranking-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 18px;
+            background: var(--bg-card);
+            border-radius: var(--radius-md);
+            text-align: left;
+        }
+
+        .ranking-item.top1 {
+            background: linear-gradient(135deg, rgba(251, 191, 36, 0.12), rgba(245, 158, 11, 0.08));
+            border: 1px solid rgba(245, 158, 11, 0.25);
+        }
+
+        .ranking-item.top2 {
+            background: linear-gradient(135deg, rgba(203, 213, 225, 0.2), rgba(148, 163, 184, 0.12));
+            border: 1px solid rgba(148, 163, 184, 0.25);
+        }
+
+        .ranking-item.top3 {
+            background: linear-gradient(135deg, rgba(251, 146, 60, 0.12), rgba(234, 88, 12, 0.08));
+            border: 1px solid rgba(251, 146, 60, 0.25);
+        }
+
+        .ranking-num {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 700;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .ranking-num.gold { background: linear-gradient(135deg, #FBBF24, #F59E0B); }
+        .ranking-num.silver { background: linear-gradient(135deg, #CBD5E1, #94A3B8); }
+        .ranking-num.bronze { background: linear-gradient(135deg, #FB923C, #EA580C); }
+        .ranking-num.normal { background: var(--bg-hover); color: var(--text-secondary); }
+
+        .ranking-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-card);
+            flex-shrink: 0;
+        }
+
+        .ranking-avatar svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .ranking-avatar-fallback {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--accent);
+            color: white;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .ranking-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .ranking-name {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .ranking-host {
+            font-size: 11px;
+            color: var(--accent);
+            margin-left: 6px;
+        }
+
+        .ranking-score {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--yellow);
+        }
+
+        .btn-back-room {
+            width: 100%;
+            padding: 14px 24px;
+            border: none;
+            border-radius: var(--radius-pill);
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
+            color: white;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-back-room:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+        }
+
+        /* 响应式 */
+        @media (max-width: 1024px) {
+            .chat-panel {
+                width: 300px;
+                min-width: 280px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-area {
+                flex-direction: column;
+            }
+            .chat-panel {
+                width: 100%;
+                height: 320px;
+                min-width: auto;
+            }
+            .left-section {
+                min-height: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部状态栏 -->
+    <header class="top-bar">
+        <div class="game-info">
+            <div class="logo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                    <line x1="9" y1="9" x2="9.01" y2="9"/>
+                    <line x1="15" y1="9" x2="15.01" y2="9"/>
+                </svg>
+                你画我猜
+            </div>
+            <div class="round-badge" id="roundBadge">等待开始</div>
+            <div class="painter-info" id="painterInfo">
+                <!-- 动态加载绘画者信息 -->
+            </div>
+            <div class="word-hint" id="wordHint" style="font-size: 13px; color: var(--text-secondary); margin-left: auto; white-space: nowrap;"></div>
+        </div>
+        <div class="timer" id="timer">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+            </svg>
+            --
+        </div>
+    </header>
+
+    <!-- 主区域 -->
+    <div class="main-area">
+        <!-- 左侧：画布 + 玩家 -->
+        <div class="left-section">
+            <!-- 画布 -->
+            <div class="canvas-area">
+                <div class="canvas-header">
+                    <span class="canvas-title">🎨 观看绘画</span>
+                    <button class="hint-btn" id="hintBtn" style="display: none;">💡 提示</button>
+                </div>
+                <div class="canvas-wrapper">
+                    <canvas id="viewCanvas" width="1000" height="700"></canvas>
+                    <div class="hint-toast" id="hintToast"></div>
+                </div>
+            </div>
+
+            <!-- 玩家列表（横向可滑动） -->
+            <div class="players-bar-wrapper">
+                <div class="players-bar" id="playersBar">
+                    <!-- 动态加载玩家列表 -->
+                </div>
+                <!-- 左侧滑动指示器 -->
+                <div class="scroll-hint-left hidden" id="scrollHintLeft">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6"/>
+                    </svg>
+                </div>
+                <!-- 右侧滑动指示器 -->
+                <div class="scroll-hint" id="scrollHint">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                </div>
+                <!-- 左右滑动按钮 -->
+                <button class="scroll-btn scroll-btn-left disabled" id="scrollBtnLeft">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6"/>
+                    </svg>
+                </button>
+                <button class="scroll-btn scroll-btn-right" id="scrollBtnRight">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- 右侧：聊天竞猜 -->
+        <div class="chat-panel">
+            <!-- 排行榜 -->
+            <div class="leaderboard-mini" id="leaderboardMini">
+                <!-- 动态加载排行榜 -->
+            </div>
+
+            <div class="chat-header">
+                <span class="chat-title">💬 聊天 & 竞猜</span>
+                <span class="online-count" id="onlineCount">0 人在线</span>
+            </div>
+
+            <div class="chat-messages" id="chatMessages">
+                <!-- 动态加载聊天消息 -->
+            </div>
+
+            <!-- 输入框 -->
+            <div class="chat-input-area">
+                <div class="input-wrapper">
+                    <input type="text" class="chat-input" id="guessInput" placeholder="输入答案或聊天..." maxlength="30">
+                    <button class="btn-send" id="btnSend">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="22" y1="2" x2="11" y2="13"/>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 猜对弹窗 -->
+    <div class="correct-overlay" id="correctOverlay">
+        <div class="correct-popup">
+            <div class="icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                </svg>
+            </div>
+            <h2>🎉 猜对了！</h2>
+            <p id="correctAnswerText"></p>
+        </div>
+    </div>
+
+    <!-- 游戏结束排行榜弹窗 -->
+    <div class="game-end-overlay" id="gameEndOverlay">
+        <div class="game-end-popup">
+            <h2>🏆 游戏结束</h2>
+            <div class="game-end-subtitle">所有玩家都已完成绘画，最终排名如下</div>
+            <div class="ranking-list" id="rankingList">
+                <!-- 动态加载排行榜 -->
+            </div>
+            <button class="btn-back-room" id="btnBackToRoom">返回房间</button>
+        </div>
+    </div>
+
+    <script>
+        // ===== 初始化画布 =====
+        const canvas = document.getElementById('viewCanvas');
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // ===== 状态变量 =====
+        let timeLeft = 0;
+        let timerInterval = null;
+        let currentPlayers = []; // 存储当前玩家列表
+        let currentPainterId = null; // 存储当前绘画者 ID
+        let gameStatus = 'waiting'; // 游戏状态：waiting/playing/finished
+        let hasGameEnded = false; // 游戏结束弹窗显示后，不再自动跳转
+        let lastRoomStatus = ''; // 用于检测游戏结束状态流转
+        let roomCode = '';
+        let roomName = '';
+        let playerName = '';
+        let playerAvatar = '';
+        const timerEl = document.getElementById('timer');
+        const roundBadge = document.getElementById('roundBadge');
+        const painterInfo = document.getElementById('painterInfo');
+        const hintBtn = document.getElementById('hintBtn');
+        const hintToast = document.getElementById('hintToast');
+        const onlineCount = document.getElementById('onlineCount');
+        const leaderboardMini = document.getElementById('leaderboardMini');
+        const correctAnswerText = document.getElementById('correctAnswerText');
+        const wordHintEl = document.getElementById('wordHint');
+
+        // ===== 计时器功能 =====
+        function updateTimerUI(seconds) {
+            timeLeft = seconds;
+            timerEl.innerHTML = `
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                ${timeLeft}
+            `;
+            if (timeLeft <= 10) {
+                timerEl.classList.add('warning');
+            } else {
+                timerEl.classList.remove('warning');
+            }
+        }
+
+        function startTimer(seconds) {
+            clearInterval(timerInterval);
+            updateTimerUI(seconds);
+            timerInterval = setInterval(() => {
+                if (timeLeft > 0) {
+                    updateTimerUI(timeLeft - 1);
+                } else {
+                    clearInterval(timerInterval);
+                }
+            }, 1000);
+        }
+
+        // ===== 提示功能 =====
+        function showHint(text) {
+            if (!text) return;
+            hintToast.textContent = `提示：${text}`;
+            hintToast.classList.add('show');
+            setTimeout(() => hintToast.classList.remove('show'), 5000);
+        }
+
+        function updateWordHint(category, wordLength, hint) {
+            if (!wordHintEl) return;
+            const parts = [];
+            if (category) parts.push(`分类：${category}`);
+            if (wordLength) parts.push(`字数：${wordLength}`);
+            if (hint) parts.push(`提示：${hint}`);
+            wordHintEl.textContent = parts.join(' | ');
+        }
+
+        // ===== 滑动指示器控制 =====
+        const playersBar = document.getElementById('playersBar');
+        const scrollHint = document.getElementById('scrollHint');
+        const scrollHintLeft = document.getElementById('scrollHintLeft');
+        const scrollBtnLeft = document.getElementById('scrollBtnLeft');
+        const scrollBtnRight = document.getElementById('scrollBtnRight');
+
+        function updateScrollHints() {
+            const isScrollable = playersBar.scrollWidth > playersBar.clientWidth;
+            const isAtStart = playersBar.scrollLeft <= 5;
+            const isAtEnd = playersBar.scrollLeft + playersBar.clientWidth >= playersBar.scrollWidth - 5;
+
+            // 右侧指示器
+            scrollHint.classList.toggle('hidden', !isScrollable || isAtEnd);
+            scrollBtnRight.classList.toggle('disabled', !isScrollable || isAtEnd);
+
+            // 左侧指示器
+            scrollHintLeft.classList.toggle('hidden', !isScrollable || isAtStart);
+            scrollBtnLeft.classList.toggle('disabled', !isScrollable || isAtStart);
+        }
+
+        function scrollTo(direction) {
+            const scrollAmount = 300; // 每次滑动的距离
+            const targetScroll = direction === 'left'
+                ? playersBar.scrollLeft - scrollAmount
+                : playersBar.scrollLeft + scrollAmount;
+
+            playersBar.scrollTo({
+                left: Math.max(0, Math.min(targetScroll, playersBar.scrollWidth - playersBar.clientWidth)),
+                behavior: 'smooth'
+            });
+        }
+
+        playersBar.addEventListener('scroll', updateScrollHints);
+        window.addEventListener('resize', updateScrollHints);
+
+        // 滑动按钮点击事件
+        scrollBtnLeft.addEventListener('click', () => scrollTo('left'));
+        scrollBtnRight.addEventListener('click', () => scrollTo('right'));
+
+        // 初始化检查
+        setTimeout(updateScrollHints, 100);
+
+        // ===== 聊天输入 =====
+        const guessInput = document.getElementById('guessInput');
+        const btnSend = document.getElementById('btnSend');
+        const chatMessages = document.getElementById('chatMessages');
+        const correctOverlay = document.getElementById('correctOverlay');
+
+        // 已删除模拟 sendMessage 函数，改用下方的 sendMessageReal
+    </script>
+
+    <!-- Socket.io -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/socket-client.js"></script>
+    <script src="js/game-state.js"></script>
+    <script src="js/bgm-manager.js"></script>
+    <script>
+        // 初始化 BGM 管理器
+        window.addEventListener('DOMContentLoaded', () => {
+            window.initBGM('bgm');
+        });
+
+        async function initSocket() {
+            try {
+                // 从 URL 获取房间代码和玩家名称
+                const urlParams = new URLSearchParams(window.location.search);
+                roomCode = urlParams.get('roomCode') || '';
+                roomName = urlParams.get('roomName') || '游戏房间';
+                playerName = urlParams.get('playerName') || '玩家' + Math.floor(Math.random() * 10000);
+                playerAvatar = urlParams.get('playerAvatar') || '';
+
+                if (!roomCode) {
+                    alert('未提供房间代码');
+                    window.location.replace('lobby.html');
+                    return;
+                }
+
+                await socketClient.connect();
+                console.log('竞猜者已连接到服务器');
+
+                // 加入房间并获取初始数据
+                const response = await socketClient.joinRoom(roomCode, playerName);
+                if (response && response.success && response.room) {
+                    const room = response.room;
+                    currentPlayers = room.players;
+                    currentPainterId = room.currentPainter;
+                    gameStatus = room.status || 'waiting';
+                    lastRoomStatus = room.status || '';
+
+                    // 状态机校验：确保当前页面与房间状态匹配
+                    const shouldStay = GameState.enforce(
+                        room,
+                        socketClient.playerId,
+                        'guesser',
+                        {
+                            roomCode: roomCode,
+                            roomName: roomName || '',
+                            playerName: playerName,
+                            playerAvatar: playerAvatar || ''
+                        }
+                    );
+                    if (!shouldStay) return;
+
+                    updatePlayersUI(currentPlayers);
+                    updateLeaderboardUI(currentPlayers);
+                    onlineCount.textContent = `${room.players.length} 人在线`;
+                    
+                    if (room.status === 'playing') {
+                        roundBadge.textContent = `第 ${room.currentRound} / ${room.maxRounds || 5} 回合`;
+                        updatePainterInfo(currentPainterId);
+                    }
+                }
+
+                // 监听房间更新（玩家列表、分数等）
+                socketClient.on('roomUpdate', (room) => {
+                    currentPlayers = room.players;
+                    currentPainterId = room.currentPainter; // 从房间更新中获取当前绘画者
+                    gameStatus = room.status || gameStatus;
+                    const newStatus = room.status || '';
+
+                    // 若 roomUpdate 先于 gameEnded 到达，检测到 playing -> finished/waiting 时主动展示结算弹窗
+                    if (!hasGameEnded && lastRoomStatus === 'playing' && (newStatus === 'finished' || newStatus === 'waiting')) {
+                        hasGameEnded = true;
+                        const rankings = (room.players || []).sort((a, b) => (b.score || 0) - (a.score || 0)).map((p, i) => ({
+                            rank: i + 1,
+                            name: p.name,
+                            avatar: p.avatar,
+                            score: p.score || 0,
+                            isHost: p.isHost
+                        }));
+                        showGameEndRankings(rankings);
+                        lastRoomStatus = newStatus;
+                        return;
+                    }
+                    lastRoomStatus = newStatus;
+
+                    // 游戏结束弹窗显示期间，不自动跳转，等待用户手动返回房间
+                    if (hasGameEnded) return;
+
+                    // 状态机校验：房间状态变化时自动修正页面
+                    const shouldStay = GameState.enforce(
+                        room,
+                        socketClient.playerId,
+                        'guesser',
+                        {
+                            roomCode: roomCode,
+                            roomName: roomName || '',
+                            playerName: playerName,
+                            playerAvatar: playerAvatar || ''
+                        }
+                    );
+                    if (!shouldStay) return;
+
+                    updatePlayersUI(currentPlayers);
+                    updateLeaderboardUI(currentPlayers);
+                    onlineCount.textContent = `${room.players.length} 人在线`;
+                });
+
+                // 监听游戏开始
+                socketClient.on('gameStarted', ({ room }) => {
+                    currentPlayers = room.players;
+                    currentPainterId = room.currentPainter;
+                    gameStatus = 'playing';
+                    updatePlayersUI(currentPlayers);
+                    updatePainterInfo(currentPainterId);
+                    roundBadge.textContent = `第 ${room.currentRound} / ${room.maxRounds || 5} 回合`;
+                    addSystemMessage(`游戏开始！`);
+                });
+
+                // 监听回合开始
+                socketClient.on('roundStarted', ({ round, totalRounds, painterId, timer, category, wordLength, hint }) => {
+                    roundBadge.textContent = `第 ${round} / ${totalRounds} 回合`;
+                    currentPainterId = painterId; // 更新当前绘画者 ID
+                    gameStatus = 'playing';
+
+                    // 判断当前用户是否是新的绘画者
+                    if (painterId === socketClient.socket.id) {
+                        console.log('我成为新的绘画者，跳转到绘画者页面');
+                        // 如果是新的绘画者，跳转到绘画者页面（不再在 URL 中携带 currentWord）
+                        const gameParams = new URLSearchParams({
+                            roomCode: roomCode,
+                            roomName: roomName || '游戏房间',
+                            playerName: playerName,
+                            playerAvatar: playerAvatar || '',
+                            round: round,
+                            totalRounds: totalRounds || 5
+                        });
+                        window.isRoleSwitching = true;
+                        window.location.replace(`painter.html?${gameParams.toString()}`);
+                        return; // 不再继续执行后续代码
+                    }
+
+                    updatePainterInfo(painterId);
+                    updatePlayersUI(currentPlayers); // 重新渲染玩家列表以更新绘画者标记
+                    updateWordHint(category, wordLength, hint);
+                    startTimer(timer);
+                    if (hint) showHint(hint);
+
+                    // 清空画布准备新回合
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    addSystemMessage(`第 ${round} 回合开始！`);
+                });
+
+                // 监听服务端权威计时同步
+                socketClient.on('timerUpdate', ({ remainingTime }) => {
+                    updateTimerUI(remainingTime);
+                });
+
+                // 监听画布更新
+                socketClient.on('canvasUpdate', ({ data }) => {
+                    updateCanvas(data);
+                });
+
+                // 监听猜词正确：服务端不再广播答案，只展示排名和加分
+                socketClient.on('guessCorrect', ({ playerId, playerName, score, rank, scoreAdded }) => {
+                    showCorrectResult(playerName, null, score, rank, scoreAdded);
+                    if (playerId === socketClient.playerId) {
+                        correctAnswerText.textContent = '你猜对了！';
+                        setTimeout(() => {
+                            correctOverlay.classList.add('show');
+                        }, 500);
+                        setTimeout(() => {
+                            correctOverlay.classList.remove('show');
+                        }, 3000);
+                    }
+                });
+
+                // 监听猜词尝试
+                socketClient.on('guessAttempt', ({ playerName, guess, isCorrect }) => {
+                    if (!isCorrect) {
+                        addOtherGuessMessage(playerName, guess);
+                    }
+                });
+
+                // 监听聊天消息
+                socketClient.on('chatMessage', ({ playerName, message }) => {
+                    addChatMessage(playerName, message);
+                });
+
+                // 监听回合结束：此时公布答案
+                socketClient.on('roundEnded', ({ message, word }) => {
+                    addSystemMessage(`${message || '本轮回合结束！'} 答案是：${word || ''}`);
+                    clearInterval(timerInterval);
+                });
+
+                // 监听游戏结束
+                socketClient.on('gameEnded', ({ room, rankings }) => {
+                    hasGameEnded = true;
+                    addSystemMessage(`🏆 游戏结束！`);
+                    showGameEndRankings(rankings || (room && room.players));
+                });
+
+                // 监听房间销毁
+                socketClient.on('roomDestroyed', ({ message }) => {
+                    alert(message || '房主已离开，房间已销毁');
+                    window.location.replace('lobby.html');
+                });
+
+            } catch (error) {
+                console.error('连接失败:', error);
+                alert('连接服务器失败，请稍后重试');
+            }
+        }
+
+        // 更新玩家列表 UI
+        function updatePlayersUI(players) {
+            const playersBar = document.getElementById('playersBar');
+            playersBar.innerHTML = '';
+
+            players.forEach(player => {
+                const isMe = player.id === socketClient.playerId;
+                const isPainter = player.id === currentPainterId; // 使用正确的 ID 判断
+                const isCorrect = player.hasGuessedCorrect;
+
+                const chip = document.createElement('div');
+                chip.className = `player-chip ${isPainter ? 'painting' : ''} ${isMe ? 'me' : ''} ${isCorrect ? 'correct' : ''}`;
+                
+                // 优化头像显示逻辑：使用玩家选择的随机头像
+                const avatarHtml = player.avatar && player.avatar.includes('<svg') 
+                    ? player.avatar 
+                    : `<div class="player-chip-avatar" style="background: ${getAvatarColor(player.name)}">${isMe ? '你' : (player.name ? player.name[0] : '?')}</div>`;
+
+                chip.innerHTML = `
+                    <div class="player-chip-left">
+                        <div class="player-avatar-mini">${avatarHtml}</div>
+                        ${isPainter ? '<div class="player-role-label">🎨 绘画者</div>' : ''}
+                    </div>
+                    <div class="player-chip-info">
+                        <div class="player-chip-name">${isMe ? '你' : player.name}</div>
+                        <div class="player-chip-status">${isPainter ? '✏️ 绘画中' : (isCorrect ? '✅ 已猜对' : '🤔 思考中')}</div>
+                    </div>
+                    <div class="player-chip-score">${player.score || 0}</div>
+                `;
+                playersBar.appendChild(chip);
+            });
+            
+            updateScrollHints();
+        }
+
+        // 更新排行榜 UI
+        function updateLeaderboardUI(players) {
+            leaderboardMini.innerHTML = '';
+            
+            // 按分数排序并取前 5 名
+            const sortedPlayers = [...players].sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 5);
+            
+            sortedPlayers.forEach((player, index) => {
+                const rankItem = document.createElement('div');
+                rankItem.className = 'rank-item';
+                
+                let rankClass = '';
+                if (index === 0) rankClass = 'gold';
+                else if (index === 1) rankClass = 'silver';
+                else if (index === 2) rankClass = 'bronze';
+                
+                const isMe = player.id === socketClient.playerId;
+
+                // 优化排行榜头像
+                const avatarHtml = player.avatar && player.avatar.includes('<svg') 
+                    ? player.avatar 
+                    : `<div class="rank-avatar-fallback">${player.name ? player.name[0] : '?'}</div>`;
+
+                rankItem.innerHTML = `
+                    <div class="rank-num ${rankClass}">${index + 1}</div>
+                    <div class="rank-avatar-mini">${avatarHtml}</div>
+                    <span class="rank-name">${isMe ? '你' : player.name}</span>
+                    <span class="rank-score">${player.score || 0}</span>
+                `;
+                leaderboardMini.appendChild(rankItem);
+            });
+        }
+
+        // 更新绘画者信息
+        function updatePainterInfo(painterId) {
+            const painter = currentPlayers.find(p => p.id === painterId);
+            
+            if (painter) {
+                // 优化绘画者头像显示
+                const avatarHtml = painter.avatar && painter.avatar.includes('<svg') 
+                    ? painter.avatar 
+                    : `<div class="painter-avatar-fallback">${painter.name ? painter.name[0] : '?'}</div>`;
+                
+                painterInfo.innerHTML = `
+                    <div class="painter-avatar-wrapper">${avatarHtml}</div>
+                    <div>
+                        <div class="painter-name">${painter.name}正在画...</div>
+                        <div class="painter-status">绘画中</div>
+                    </div>
+                `;
+            } else {
+                painterInfo.innerHTML = '<span style="font-size: 14px; color: var(--text-secondary);">等待绘画者...</span>';
+            }
+        }
+
+        // 系统消息
+        function addSystemMessage(text) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message system';
+            const textDiv = document.createElement('div');
+            textDiv.className = 'message-text';
+            textDiv.textContent = text;
+            msgDiv.appendChild(textDiv);
+            chatMessages.appendChild(msgDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // 生成头像颜色
+        function getAvatarColor(name) {
+            const colors = [
+                'linear-gradient(135deg, #6366F1, #8B5CF6)',
+                'linear-gradient(135deg, #FB923C, #F97316)',
+                'linear-gradient(135deg, #22C55E, #16A34A)',
+                'linear-gradient(135deg, #FBBF24, #F59E0B)',
+                'linear-gradient(135deg, #EF4444, #DC2626)',
+                'linear-gradient(135deg, #EC4899, #F472B6)'
+            ];
+            if (!name) return colors[0];
+            let hash = 0;
+            for (let i = 0; i < name.length; i++) {
+                hash = name.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            return colors[Math.abs(hash) % colors.length];
+        }
+
+        // 更新画布
+        function updateCanvas(imageData) {
+            const img = new Image();
+            img.onload = () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0);
+            };
+            img.src = imageData;
+        }
+
+        // 显示猜词正确结果
+        function showCorrectResult(playerName, guess, score, rank, scoreAdded) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message guess-correct';
+
+            // 根据排名添加不同的样式和徽章
+            let rankBadge = '';
+            let rankStyle = '';
+
+            if (rank === 1) {
+                rankBadge = '🥇 第1名';
+                rankStyle = 'color: #FFD700; font-weight: 600;';
+            } else if (rank === 2) {
+                rankBadge = '🥈 第2名';
+                rankStyle = 'color: #C0C0C0; font-weight: 600;';
+            } else if (rank === 3) {
+                rankBadge = '🥉 第3名';
+                rankStyle = 'color: #CD7F32; font-weight: 600;';
+            } else {
+                rankBadge = `第${rank}名`;
+                rankStyle = 'color: var(--green);';
+            }
+
+            msgDiv.innerHTML = `
+                <div class="message-content">
+                    <div class="message-name" style="${rankStyle}">${playerName} ${rankBadge} 猜对了！</div>
+                    <div class="message-text">答案: *** | +${scoreAdded}分 | 总分: ${score}分</div>
+                </div>
+            `;
+            chatMessages.appendChild(msgDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // 显示游戏结束排行榜
+        function showGameEndRankings(rankings) {
+            const overlay = document.getElementById('gameEndOverlay');
+            const list = document.getElementById('rankingList');
+            if (!overlay || !list) return;
+
+            // 兼容服务端不同格式：如果是玩家数组则按分数排序
+            const players = Array.isArray(rankings) && rankings.length > 0 && rankings[0].score !== undefined
+                ? rankings
+                : (rankings || []).sort((a, b) => (b.score || 0) - (a.score || 0)).map((p, i) => ({
+                    rank: i + 1,
+                    name: p.name,
+                    avatar: p.avatar,
+                    score: p.score || 0,
+                    isHost: p.isHost
+                }));
+
+            list.innerHTML = '';
+            players.forEach((player, index) => {
+                const rank = player.rank || index + 1;
+                let topClass = '';
+                let numClass = 'normal';
+                if (rank === 1) { topClass = 'top1'; numClass = 'gold'; }
+                else if (rank === 2) { topClass = 'top2'; numClass = 'silver'; }
+                else if (rank === 3) { topClass = 'top3'; numClass = 'bronze'; }
+
+                const avatarHtml = player.avatar && player.avatar.includes('<svg')
+                    ? player.avatar
+                    : `<div class="ranking-avatar-fallback">${player.name ? player.name[0] : '?'}</div>`;
+
+                const hostBadge = player.isHost ? '<span class="ranking-host">房主</span>' : '';
+
+                const item = document.createElement('div');
+                item.className = `ranking-item ${topClass}`;
+                item.innerHTML = `
+                    <div class="ranking-num ${numClass}">${rank}</div>
+                    <div class="ranking-avatar">${avatarHtml}</div>
+                    <div class="ranking-info">
+                        <div class="ranking-name">${player.name || '匿名'}${hostBadge}</div>
+                    </div>
+                    <div class="ranking-score">${player.score || 0}</div>
+                `;
+                list.appendChild(item);
+            });
+
+            overlay.classList.add('show');
+        }
+
+        // 返回房间
+        function backToRoom() {
+            const me = currentPlayers.find(p => p.id === socketClient.playerId);
+            const isHost = me ? me.isHost : false;
+            const params = new URLSearchParams({
+                roomCode: roomCode,
+                roomName: roomName || '游戏房间',
+                playerName: playerName,
+                playerAvatar: playerAvatar || '',
+                status: '等待中',
+                isHost: isHost ? 'true' : 'false'
+            });
+            window.isRoleSwitching = true;
+            window.location.replace(`room-lobby.html?${params.toString()}`);
+        }
+
+        document.getElementById('btnBackToRoom').addEventListener('click', backToRoom);
+
+        // 创建通用消息 DOM（安全渲染，防止 XSS）
+        function createMessageDiv(playerName, text, extraClass = '') {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message' + (extraClass ? ` ${extraClass}` : '');
+            const initial = playerName ? playerName[0] : '?';
+            const avatarColor = getAvatarColor(playerName);
+
+            const avatarDiv = document.createElement('div');
+            avatarDiv.className = 'message-avatar';
+            avatarDiv.style.background = avatarColor;
+            avatarDiv.textContent = initial;
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+
+            const nameDiv = document.createElement('div');
+            nameDiv.className = 'message-name';
+            nameDiv.textContent = playerName;
+
+            const textDiv = document.createElement('div');
+            textDiv.className = 'message-text';
+            textDiv.textContent = text;
+
+            contentDiv.appendChild(nameDiv);
+            contentDiv.appendChild(textDiv);
+            msgDiv.appendChild(avatarDiv);
+            msgDiv.appendChild(contentDiv);
+            return msgDiv;
+        }
+
+        // 添加其他人的猜词消息
+        function addOtherGuessMessage(playerName, guess) {
+            const msgDiv = createMessageDiv(playerName, guess);
+            chatMessages.appendChild(msgDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // 添加聊天消息
+        function addChatMessage(playerName, message) {
+            const msgDiv = createMessageDiv(playerName, message);
+            chatMessages.appendChild(msgDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // 修改发送消息函数
+        function sendMessageReal() {
+            const text = guessInput.value.trim();
+            if (!text) return;
+            
+            console.log('发送消息:', text);
+            console.log('游戏状态:', gameStatus, '当前绘画者:', currentPainterId, '我的ID:', socketClient.playerId);
+            
+            // 逻辑优化：
+            // 如果游戏正在进行且自己不是绘画者，统一作为 guess 发送
+            // 服务器会处理 guess 逻辑，如果没猜对会作为 guessAttempt 广播
+            // 如果没在游戏，则作为普通 chatMessage 发送
+            if (gameStatus === 'playing' && currentPainterId && currentPainterId !== socketClient.playerId) {
+                console.log('作为 guess 发送');
+                socketClient.sendGuess(text);
+            } else {
+                console.log('作为聊天消息发送');
+                socketClient.sendChatMessage(text);
+            }
+            
+            guessInput.value = '';
+        }
+
+        // 初始化连接
+        initSocket();
+
+        // 使用 DOMContentLoaded 确保元素已加载并重新绑定
+        window.addEventListener('DOMContentLoaded', () => {
+            const btn = document.getElementById('btnSend');
+            const input = document.getElementById('guessInput');
+            
+            if (btn) {
+                btn.onclick = sendMessageReal;
+            }
+            if (input) {
+                input.onkeypress = (e) => {
+                    if (e.key === 'Enter') sendMessageReal();
+                };
+            }
+        });
+
+        // 绑定发送按钮事件 (备用方案)
+        btnSend.addEventListener('click', sendMessageReal);
+        guessInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessageReal();
+        });
+
+        // ===== 防误触退出功能 =====
+        window.addEventListener('beforeunload', (e) => {
+            // 角色身份切换时直接跳转，不提示
+            if (window.isRoleSwitching) {
+                return;
+            }
+            // 只有在游戏进行中才提示
+            if (socketClient.socket && socketClient.socket.connected) {
+                e.preventDefault();
+                e.returnValue = '游戏正在进行中，确定要退出吗？';
+                return e.returnValue;
+            }
+        });
+    </script>
+
+    <!-- 背景音乐 -->
+    <audio id="bgm" loop>
+        <source src="background_music/Game.mp3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        // 初始化 BGM 管理器
+        window.addEventListener('DOMContentLoaded', () => {
+            window.initBGM('bgm');
+        });
+    </script>
+</body>
+</html>
