@@ -72,6 +72,7 @@ class SocketClient {
             'roundStarted',
             'timerUpdate',
             'painterWord',
+            'wordCandidates',
             'wordSelected',
             'gameEnded',
             'roomList',
@@ -206,6 +207,23 @@ class SocketClient {
         } else {
             console.error('[socket-client] socket is null, cannot select word');
         }
+    }
+
+    refreshWords(roomCode = this.roomCode) {
+        return new Promise((resolve, reject) => {
+            if (!this.socket) {
+                reject(new Error('未连接到服务器'));
+                return;
+            }
+
+            this.socket.emit('refreshWords', { roomCode }, (response) => {
+                if (response && response.success) {
+                    resolve(response);
+                } else {
+                    reject(new Error(response?.message || '刷新词汇失败'));
+                }
+            });
+        });
     }
 
     sendChatMessage(message, roomCode = this.roomCode) {

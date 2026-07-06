@@ -187,34 +187,35 @@ function handleNextRound(roomCode) {
     }
 
     room.currentPainter = nextPainter.id;
-    room.currentWord = wordBank.getRandomWord(room.wordPackId);
+    room.currentWord = null; // 等待绘画者手动选择
+    room.wordCandidates = generateWordCandidates(room, 6);
+    room.refreshLeft = 3; // 剩余刷新次数
 
     room.players.forEach(p => {
         if (p.status !== 'offline') p.status = 'playing';
     });
 
-    // 向所有人广播回合开始（不包含正确答案，只给提示信息）
+    // 向所有人广播回合开始（此时答案未确定，只显示等待提示）
     io.to(roomCode).emit('roundStarted', {
         round: room.currentRound,
         totalRounds: onlinePlayers.length,
         painterId: room.currentPainter,
         timer: room.roundTime,
-        category: room.currentWord.category,
-        wordLength: room.currentWord.word.length,
-        hint: room.currentWord.hint || null
+        category: null,
+        wordLength: null,
+        hint: null,
+        selecting: true
     });
 
-    // 单独把正确答案发给绘画者
-    io.to(room.currentPainter).emit('painterWord', {
-        word: room.currentWord.word,
-        category: room.currentWord.category,
-        hint: room.currentWord.hint || null
+    // 单独给绘画者发送候选词汇列表
+    io.to(room.currentPainter).emit('wordCandidates', {
+        candidates: room.wordCandidates,
+        refreshLeft: room.refreshLeft
     });
 
     broadcastRoomUpdate(roomCode);
 
-    // 启动服务端权威倒计时
-    startRoundTimer(roomCode);
+    // 绘画者选择词汇后才会启动计时器
 }
 
 const rooms = new Map();
@@ -285,6 +286,8 @@ function resetRoomToWaiting(roomCode) {
     room.currentRound = 0;
     room.currentPainter = null;
     room.currentWord = null;
+    room.wordCandidates = null;
+    room.refreshLeft = 0;
     room.guessRankings = [];
 
     room.players.forEach(p => {
@@ -322,6 +325,30 @@ function censorWord(message, word) {
     const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const regex = new RegExp(escaped, 'g');
     return message.replace(regex, '***');
+}
+
+// 生成绘画者候选词汇列表（同一批次内不重复，每次刷新独立随机）
+function generateWordCandidates(room, count = 6) {
+    const candidates = [];
+    const seen = new Set();
+    let attempts = 0;
+    const maxAttempts = count * 20; // 防止词库过小导致死循环
+
+    while (candidates.length < count && attempts < maxAttempts) {
+        const word = wordBank.getRandomWord(room.wordPackId);
+        attempts++;
+        if (!seen.has(word)) {
+            seen.add(word);
+            candidates.push(word);
+        }
+    }
+
+    // 若词库不足，允许重复填充以满足数量要求
+    while (candidates.length < count) {
+        candidates.push(wordBank.getRandomWord(room.wordPackId));
+    }
+
+    return candidates;
 }
 
 // 启动回合倒计时
@@ -485,25 +512,46 @@ io.on('connection', (socket) => {
                 callback({ success: true, room: getRoomSnapshot(room), player: existingPlayer, isReconnect: true });
             }
 
-            // 如果正在游戏中，向该玩家同步当前回合状态
-            if (room.status === ROOM_STATUS.PLAYING && room.currentWord) {
+// 如果正在游戏中，向该玩家同步当前回合状态
+            if (room.status === ROOM_STATUS.PLAYING) {
                 const onlinePlayers = room.players.filter(p => p.status !== 'offline');
-                socket.emit('roundStarted', {
-                    round: room.currentRound,
-                    totalRounds: onlinePlayers.length,
-                    painterId: room.currentPainter,
-                    timer: room.remainingTime ?? room.roundTime,
-                    category: room.currentWord.category,
-                    wordLength: room.currentWord.word.length,
-                    hint: room.currentWord.hint || null
-                });
-                socket.emit('timerUpdate', { remainingTime: room.remainingTime ?? room.roundTime });
-                if (socket.id === room.currentPainter) {
-                    socket.emit('painterWord', {
-                        word: room.currentWord.word,
+                if (room.currentWord) {
+                    socket.emit('roundStarted', {
+                        round: room.currentRound,
+                        totalRounds: onlinePlayers.length,
+                        painterId: room.currentPainter,
+                        timer: room.remainingTime ?? room.roundTime,
                         category: room.currentWord.category,
-                        hint: room.currentWord.hint || null
+                        wordLength: room.currentWord.word.length,
+                        hint: room.currentWord.hint || null,
+                        selecting: false
                     });
+                    socket.emit('timerUpdate', { remainingTime: room.remainingTime ?? room.roundTime });
+                    if (socket.id === room.currentPainter) {
+                        socket.emit('painterWord', {
+                            word: room.currentWord.word,
+                            category: room.currentWord.category,
+                            hint: room.currentWord.hint || null
+                        });
+                    }
+                } else {
+                    // 绘画者尚未选择词汇
+                    socket.emit('roundStarted', {
+                        round: room.currentRound,
+                        totalRounds: onlinePlayers.length,
+                        painterId: room.currentPainter,
+                        timer: room.roundTime,
+                        category: null,
+                        wordLength: null,
+                        hint: null,
+                        selecting: true
+                    });
+                    if (socket.id === room.currentPainter && room.wordCandidates) {
+                        socket.emit('wordCandidates', {
+                            candidates: room.wordCandidates,
+                            refreshLeft: room.refreshLeft
+                        });
+                    }
                 }
             }
 
@@ -541,24 +589,44 @@ io.on('connection', (socket) => {
         }
 
         // 如果正在游戏中，向该玩家同步当前回合状态
-        if (room.status === ROOM_STATUS.PLAYING && room.currentWord) {
+        if (room.status === ROOM_STATUS.PLAYING) {
             const onlinePlayers = room.players.filter(p => p.status !== 'offline');
-            socket.emit('roundStarted', {
-                round: room.currentRound,
-                totalRounds: onlinePlayers.length,
-                painterId: room.currentPainter,
-                timer: room.remainingTime ?? room.roundTime,
-                category: room.currentWord.category,
-                wordLength: room.currentWord.word.length,
-                hint: room.currentWord.hint || null
-            });
-            socket.emit('timerUpdate', { remainingTime: room.remainingTime ?? room.roundTime });
-            if (socket.id === room.currentPainter) {
-                socket.emit('painterWord', {
-                    word: room.currentWord.word,
+            if (room.currentWord) {
+                socket.emit('roundStarted', {
+                    round: room.currentRound,
+                    totalRounds: onlinePlayers.length,
+                    painterId: room.currentPainter,
+                    timer: room.remainingTime ?? room.roundTime,
                     category: room.currentWord.category,
-                    hint: room.currentWord.hint || null
+                    wordLength: room.currentWord.word.length,
+                    hint: room.currentWord.hint || null,
+                    selecting: false
                 });
+                socket.emit('timerUpdate', { remainingTime: room.remainingTime ?? room.roundTime });
+                if (socket.id === room.currentPainter) {
+                    socket.emit('painterWord', {
+                        word: room.currentWord.word,
+                        category: room.currentWord.category,
+                        hint: room.currentWord.hint || null
+                    });
+                }
+            } else {
+                socket.emit('roundStarted', {
+                    round: room.currentRound,
+                    totalRounds: onlinePlayers.length,
+                    painterId: room.currentPainter,
+                    timer: room.roundTime,
+                    category: null,
+                    wordLength: null,
+                    hint: null,
+                    selecting: true
+                });
+                if (socket.id === room.currentPainter && room.wordCandidates) {
+                    socket.emit('wordCandidates', {
+                        candidates: room.wordCandidates,
+                        refreshLeft: room.refreshLeft
+                    });
+                }
             }
         }
 
@@ -780,7 +848,9 @@ io.on('connection', (socket) => {
                 return aIndex - bIndex;
             });
         room.currentPainter = sortedPlayers[0].id;
-        room.currentWord = wordBank.getRandomWord(room.wordPackId);
+        room.currentWord = null; // 等待绘画者手动选择
+        room.wordCandidates = generateWordCandidates(room, 6);
+        room.refreshLeft = 3; // 剩余刷新次数
         room.guessRankings = []; // 清空答题排名
         room.maxRounds = sortedPlayers.length; // 一轮游戏按准备玩家数量进行
 
@@ -797,18 +867,27 @@ io.on('connection', (socket) => {
 
         io.to(roomCode).emit('gameStarted', {
             room: roomSnapshot
-            // 注意：不再广播 currentWord，答案通过 painterWord 单独发给绘画者
         });
 
-        // 单独把第一回合的答案发给绘画者
-        io.to(room.currentPainter).emit('painterWord', {
-            word: room.currentWord.word,
-            category: room.currentWord.category,
-            hint: room.currentWord.hint || null
+        // 向所有人广播回合开始（此时答案未确定，只显示等待提示）
+        io.to(roomCode).emit('roundStarted', {
+            round: room.currentRound,
+            totalRounds: room.maxRounds,
+            painterId: room.currentPainter,
+            timer: room.roundTime,
+            category: null,
+            wordLength: null,
+            hint: null,
+            selecting: true
         });
 
-        // 启动第一回合倒计时（页面跳转后重连的玩家会在 joinRoom 中同步状态）
-        startRoundTimer(roomCode);
+        // 单独给绘画者发送候选词汇列表
+        io.to(room.currentPainter).emit('wordCandidates', {
+            candidates: room.wordCandidates,
+            refreshLeft: room.refreshLeft
+        });
+
+        // 绘画者选择词汇后才会启动计时器
 
         console.log(`游戏开始: ${roomCode}`);
     });
@@ -841,29 +920,68 @@ io.on('connection', (socket) => {
             return;
         }
 
-        // 更新当前词语
-        room.currentWord = { category: '自定义', word: word };
-        console.log(`[selectWord] 绘画者选择词语: "${word}"，房间: ${roomCode}`);
+        // 在候选词中查找完整信息
+        const matchedCandidate = room.wordCandidates && room.wordCandidates.find(c => c.word === word);
+        room.currentWord = matchedCandidate || { category: '自定义', word: word, hint: null };
+        console.log(`[selectWord] 绘画者选择词语: "${room.currentWord.word}"，房间: ${roomCode}`);
 
-        // 只向绘画者发送确认，避免把答案广播给竞猜者
-        socket.emit('wordSelected', {
-            word: word,
-            painterId: socket.id
-        });
-
-        // 向房间内其他人广播提示信息（不暴露答案）
-        socket.to(roomCode).emit('roundStarted', {
+        // 向所有人广播回合开始（包含提示信息，不暴露答案）
+        io.to(roomCode).emit('roundStarted', {
             round: room.currentRound,
             totalRounds: room.maxRounds,
             painterId: room.currentPainter,
             timer: room.roundTime,
-            category: '自定义',
-            wordLength: word.length,
-            hint: null
+            category: room.currentWord.category,
+            wordLength: room.currentWord.word.length,
+            hint: room.currentWord.hint || null,
+            selecting: false
+        });
+
+        // 单独向绘画者发送确认
+        socket.emit('painterWord', {
+            word: room.currentWord.word,
+            category: room.currentWord.category,
+            hint: room.currentWord.hint || null
         });
 
         // 开始倒计时
         startRoundTimer(roomCode);
+    });
+
+    // 绘画者刷新候选词汇
+    socket.on('refreshWords', ({ roomCode }, callback) => {
+        const room = rooms.get(roomCode);
+        if (!room) {
+            if (callback) callback({ success: false, message: '房间不存在' });
+            return;
+        }
+
+        // 只有绘画者可以刷新
+        if (socket.id !== room.currentPainter) {
+            if (callback) callback({ success: false, message: '只有绘画者可以刷新词汇' });
+            return;
+        }
+
+        if (room.refreshLeft <= 0) {
+            if (callback) callback({ success: false, message: '刷新次数已用完' });
+            return;
+        }
+
+        room.refreshLeft--;
+        room.wordCandidates = generateWordCandidates(room, 6);
+
+        console.log(`[refreshWords] 绘画者刷新词汇，剩余次数: ${room.refreshLeft}，房间: ${roomCode}`);
+
+        // 向绘画者返回新的候选词汇
+        const payload = {
+            candidates: room.wordCandidates,
+            refreshLeft: room.refreshLeft
+        };
+        socket.emit('wordCandidates', payload);
+
+        if (callback) {
+            callback({ success: true, ...payload });
+        }
     });
 
     socket.on('guess', ({ roomCode, guess }) => {

@@ -1328,38 +1328,8 @@
                 await socketClient.connect();
                 console.log('竞猜者已连接到服务器');
 
-                // 加入房间并获取初始数据
-                const response = await socketClient.joinRoom(roomCode, playerName);
-                if (response && response.success && response.room) {
-                    const room = response.room;
-                    currentPlayers = room.players;
-                    currentPainterId = room.currentPainter;
-                    gameStatus = room.status || 'waiting';
-                    lastRoomStatus = room.status || '';
-
-                    // 状态机校验：确保当前页面与房间状态匹配
-                    const shouldStay = GameState.enforce(
-                        room,
-                        socketClient.playerId,
-                        'guesser',
-                        {
-                            roomCode: roomCode,
-                            roomName: roomName || '',
-                            playerName: playerName,
-                            playerAvatar: playerAvatar || ''
-                        }
-                    );
-                    if (!shouldStay) return;
-
-                    updatePlayersUI(currentPlayers);
-                    updateLeaderboardUI(currentPlayers);
-                    onlineCount.textContent = `${room.players.length} 人在线`;
-                    
-                    if (room.status === 'playing') {
-                        roundBadge.textContent = `第 ${room.currentRound} / ${room.maxRounds || 5} 回合`;
-                        updatePainterInfo(currentPainterId);
-                    }
-                }
+                // ===== 先注册所有 socket 事件监听，再 joinRoom =====
+                // 这样服务器在 joinRoom 回调中同步的事件（如 roundStarted）才不会丢失
 
                 // 监听房间更新（玩家列表、分数等）
                 socketClient.on('roomUpdate', (room) => {
@@ -1418,7 +1388,7 @@
                 });
 
                 // 监听回合开始
-                socketClient.on('roundStarted', ({ round, totalRounds, painterId, timer, category, wordLength, hint }) => {
+                socketClient.on('roundStarted', ({ round, totalRounds, painterId, timer, category, wordLength, hint, selecting }) => {
                     roundBadge.textContent = `第 ${round} / ${totalRounds} 回合`;
                     currentPainterId = painterId; // 更新当前绘画者 ID
                     gameStatus = 'playing';
@@ -1442,6 +1412,21 @@
 
                     updatePainterInfo(painterId);
                     updatePlayersUI(currentPlayers); // 重新渲染玩家列表以更新绘画者标记
+
+                    // 绘画者正在选择词汇，竞猜者等待
+                    if (selecting) {
+                        wordHintEl.textContent = '等待绘画者选择词汇...';
+                        document.getElementById('timer').textContent = '--';
+                        if (timerInterval) clearInterval(timerInterval);
+
+                        // 清空画布准备新回合
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                        addSystemMessage(`第 ${round} 回合开始，等待绘画者选择词汇...`);
+                        return;
+                    }
+
                     updateWordHint(category, wordLength, hint);
                     startTimer(timer);
                     if (hint) showHint(hint);
@@ -1507,6 +1492,39 @@
                     alert(message || '房主已离开，房间已销毁');
                     window.location.replace('lobby.html');
                 });
+
+                // 加入房间并获取初始数据
+                const response = await socketClient.joinRoom(roomCode, playerName);
+                if (response && response.success && response.room) {
+                    const room = response.room;
+                    currentPlayers = room.players;
+                    currentPainterId = room.currentPainter;
+                    gameStatus = room.status || 'waiting';
+                    lastRoomStatus = room.status || '';
+
+                    // 状态机校验：确保当前页面与房间状态匹配
+                    const shouldStay = GameState.enforce(
+                        room,
+                        socketClient.playerId,
+                        'guesser',
+                        {
+                            roomCode: roomCode,
+                            roomName: roomName || '',
+                            playerName: playerName,
+                            playerAvatar: playerAvatar || ''
+                        }
+                    );
+                    if (!shouldStay) return;
+
+                    updatePlayersUI(currentPlayers);
+                    updateLeaderboardUI(currentPlayers);
+                    onlineCount.textContent = `${room.players.length} 人在线`;
+                    
+                    if (room.status === 'playing') {
+                        roundBadge.textContent = `第 ${room.currentRound} / ${room.maxRounds || 5} 回合`;
+                        updatePainterInfo(currentPainterId);
+                    }
+                }
 
             } catch (error) {
                 console.error('连接失败:', error);

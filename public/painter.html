@@ -49,6 +49,7 @@
             background: var(--bg-primary);
             min-height: 100vh;
             display: flex;
+            flex-direction: column;
             overflow: hidden;
             color: var(--text-primary);
             overscroll-behavior-x: none;
@@ -56,11 +57,38 @@
             touch-action: none;
         }
 
+        /* 顶部状态栏 */
+        .top-status-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: rgba(248, 250, 252, 0.9);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--glass-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+            padding: 0 20px;
+        }
+
+        /* 主内容区域 */
+        .main-content {
+            margin-top: 60px;
+            flex: 1;
+            display: flex;
+            position: relative;
+            overflow: hidden;
+        }
+
         /* 左侧工具栏 */
         .sidebar {
             position: fixed;
             left: 20px;
-            top: 50%;
+            top: calc(50% + 30px);
             transform: translateY(-50%);
             background: var(--glass-bg);
             backdrop-filter: blur(20px);
@@ -512,7 +540,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 40px 40px 40px 140px;
+            padding: 20px 40px 40px 140px;
             position: relative;
             background: linear-gradient(135deg, #e0e7ff 0%, #f8fafc 50%, #ede9fe 100%);
             overscroll-behavior-x: none;
@@ -590,7 +618,7 @@
         .actions-panel {
             position: fixed;
             right: 20px;
-            top: 50%;
+            top: calc(50% + 30px);
             transform: translateY(-50%);
             background: var(--glass-bg);
             backdrop-filter: blur(20px);
@@ -1249,22 +1277,28 @@
             color: var(--text-primary);
         }
 
+        .target-btn-secondary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .refresh-count {
+            margin-left: 4px;
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
         /* 当前目标显示 */
         .current-target {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
             border: 2px solid var(--accent-light);
             border-radius: var(--radius-pill);
-            padding: 10px 24px;
+            padding: 8px 20px;
             display: flex;
             align-items: center;
             gap: 12px;
-            z-index: 200;
             opacity: 0;
             visibility: hidden;
             transition: all var(--transition-normal);
@@ -1277,11 +1311,27 @@
         }
 
         .current-target-icon {
-            font-size: 20px;
+            width: 20px;
+            height: 20px;
+            color: var(--accent-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .current-target-icon svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .current-target-info {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
         }
 
         .current-target-text {
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 600;
             color: var(--text-primary);
         }
@@ -1292,15 +1342,15 @@
         }
 
         .current-target-timer {
-            margin-left: 12px;
-            min-width: 44px;
-            height: 28px;
+            margin-left: 8px;
+            min-width: 40px;
+            height: 26px;
             display: flex;
             align-items: center;
             justify-content: center;
             background: var(--accent-color);
             color: white;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 700;
             border-radius: var(--radius-pill);
             padding: 0 10px;
@@ -1316,14 +1366,22 @@
     <!-- 实时评论弹幕容器 -->
     <div class="barrage-container" id="barrageContainer"></div>
 
-    <!-- 当前绘画目标显示 -->
-    <div class="current-target" id="currentTarget">
-        <div class="current-target-icon">🎯</div>
-        <div>
-            <div class="current-target-text" id="currentTargetText">正在绘画: 苹果</div>
-            <div class="current-target-hint">其他玩家正在猜测...</div>
+    <!-- 顶部状态栏：绘画目标与计时 -->
+    <div class="top-status-bar" id="topStatusBar">
+        <div class="current-target" id="currentTarget">
+            <div class="current-target-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <circle cx="12" cy="12" r="6"/>
+                    <circle cx="12" cy="12" r="2"/>
+                </svg>
+            </div>
+            <div class="current-target-info">
+                <div class="current-target-text" id="currentTargetText">正在绘画: 苹果</div>
+                <div class="current-target-hint">其他玩家正在猜测...</div>
+            </div>
+            <div class="current-target-timer" id="currentTargetTimer">--</div>
         </div>
-        <div class="current-target-timer" id="currentTargetTimer">--</div>
     </div>
 
     <!-- 绘画目标选择弹窗 -->
@@ -1331,25 +1389,21 @@
         <div class="target-modal-content">
             <div class="target-modal-header">
                 <h2 class="target-modal-title">选择绘画目标</h2>
-                <p class="target-modal-subtitle">第1步：选择一个分类</p>
+                <p class="target-modal-subtitle">从以下 6 个词汇中选择一个进行绘画</p>
             </div>
 
-            <!-- 步骤指示器 -->
-            <div class="target-step-indicator">
-                <div class="step-dot active" id="stepDot1"></div>
-                <div class="step-dot" id="stepDot2"></div>
-                <div class="step-dot" id="stepDot3"></div>
-            </div>
-
-            <!-- 分类/物品网格 -->
+            <!-- 候选词汇网格 -->
             <div class="target-grid" id="targetGrid">
-                <!-- 分类会动态生成 -->
+                <!-- 候选词汇会动态生成 -->
             </div>
 
             <!-- 确认按钮 -->
             <div class="target-btn-group">
-                <button class="target-btn target-btn-secondary" id="btnPrev" style="display: none;">上一步</button>
-                <button class="target-btn target-btn-primary" id="btnNext" disabled>下一步</button>
+                <button class="target-btn target-btn-secondary" id="btnRefresh">
+                    <span>刷新词汇</span>
+                    <span class="refresh-count" id="refreshCount">(剩余 3 次)</span>
+                </button>
+                <button class="target-btn target-btn-primary" id="btnNext" disabled>开始绘画</button>
             </div>
         </div>
     </div>
@@ -1366,8 +1420,11 @@
         </div>
     </div>
 
-    <!-- 左侧工具栏 -->
-    <div class="sidebar" id="sidebar">
+    <!-- 主内容区域 -->
+    <div class="main-content">
+
+        <!-- 左侧工具栏 -->
+        <div class="sidebar" id="sidebar">
         <!-- 折叠按钮 -->
         <button class="sidebar-toggle" id="sidebarToggle" data-tooltip="隐藏工具栏">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1540,6 +1597,7 @@
             <span class="info-value" id="currentSizeDisplay">5</span>
         </div>
     </div>
+    <!-- /主内容区域 -->
 
     <script>
         // 颜色调色板配置
@@ -2248,54 +2306,58 @@
         // ===== 绘画目标选择系统 =====
         const targetModal = document.getElementById('targetModal');
         const targetGrid = document.getElementById('targetGrid');
-        const stepDot1 = document.getElementById('stepDot1');
-        const stepDot2 = document.getElementById('stepDot2');
-        const stepDot3 = document.getElementById('stepDot3');
         const btnNext = document.getElementById('btnNext');
-        const btnPrev = document.getElementById('btnPrev');
-        const modalSubtitle = document.querySelector('.target-modal-subtitle');
+        const btnRefresh = document.getElementById('btnRefresh');
+        const refreshCount = document.getElementById('refreshCount');
         const currentTarget = document.getElementById('currentTarget');
         const currentTargetText = document.getElementById('currentTargetText');
         const currentTargetTimer = document.getElementById('currentTargetTimer');
 
-        let currentStep = 1;
-        let selectedCategory = null;
-        let selectedItem = null;
+        let wordCandidates = [];
+        let refreshLeft = 3;
+        let selectedIndex = null;
+        let selectedWord = null;
 
-        // 绘画目标数据
-        const categories = [
-            { id: 'fruit', name: '水果', icon: '🍎', items: ['苹果', '香蕉', '橙子', '草莓', '西瓜', '葡萄'] },
-            { id: 'animal', name: '动物', icon: '🐱', items: ['猫', '狗', '鸟', '鱼', '兔子', '蝴蝶'] },
-            { id: 'object', name: '日常用品', icon: '📱', items: ['手机', '杯子', '书本', '椅子', '钥匙', '眼镜'] },
-            { id: 'food', name: '美食', icon: '🍕', items: ['披萨', '蛋糕', '面条', '汉堡', '冰淇淋', '饺子'] },
-            { id: 'nature', name: '自然', icon: '🌳', items: ['太阳', '月亮', '星星', '彩虹', '山峰', '河流'] },
-            { id: 'vehicle', name: '交通工具', icon: '🚗', items: ['汽车', '飞机', '轮船', '火车', '自行车', '摩托车'] }
-        ];
+        // 渲染候选词汇网格
+        function renderCandidates(candidates) {
+            if (!candidates || candidates.length === 0) return;
 
-        // 渲染分类网格
-        function renderCategories() {
+            wordCandidates = candidates;
             targetGrid.innerHTML = '';
-            categories.forEach(cat => {
+
+            candidates.forEach((candidate, index) => {
+                const word = typeof candidate === 'string' ? candidate : candidate.word;
+                const category = typeof candidate === 'string' ? '' : (candidate.category || '');
+
                 const card = document.createElement('div');
                 card.className = 'target-card';
-                card.dataset.categoryId = cat.id;
+                card.dataset.index = index;
                 card.innerHTML = `
-                    <div class="target-card-icon">${cat.icon}</div>
-                    <div class="target-card-name">${cat.name}</div>
+                    <div class="target-card-name" style="font-size: 18px; margin-bottom: 6px;">${word}</div>
+                    ${category ? `<div style="font-size: 12px; color: var(--text-secondary);">${category}</div>` : ''}
                 `;
-                card.addEventListener('click', () => selectCategory(cat.id));
+                card.addEventListener('click', () => selectCandidate(index));
                 targetGrid.appendChild(card);
             });
+
+            // 恢复选中状态
+            if (selectedIndex !== null && selectedIndex >= 0 && selectedIndex < candidates.length) {
+                const cards = targetGrid.querySelectorAll('.target-card');
+                if (cards[selectedIndex]) {
+                    cards[selectedIndex].classList.add('selected');
+                }
+            }
         }
 
-        // 选择分类
-        function selectCategory(categoryId) {
-            selectedCategory = categories.find(c => c.id === categoryId);
-            
+        // 选择候选词汇
+        function selectCandidate(index) {
+            selectedIndex = index;
+            selectedWord = wordCandidates[index];
+
             // 更新选中状态
             document.querySelectorAll('.target-card').forEach(card => {
                 card.classList.remove('selected');
-                if (card.dataset.categoryId === categoryId) {
+                if (parseInt(card.dataset.index) === index) {
                     card.classList.add('selected');
                 }
             });
@@ -2303,121 +2365,58 @@
             btnNext.disabled = false;
         }
 
-        // 渲染物品网格
-        function renderItems() {
-            if (!selectedCategory) return;
-
-            targetGrid.innerHTML = '';
-            selectedCategory.items.forEach(item => {
-                const card = document.createElement('div');
-                card.className = 'target-card';
-                card.dataset.itemName = item;
-                card.innerHTML = `
-                    <div class="target-card-icon">${selectedCategory.icon}</div>
-                    <div class="target-card-name">${item}</div>
-                `;
-                card.addEventListener('click', () => selectItem(item));
-                targetGrid.appendChild(card);
-            });
+        // 更新刷新按钮显示
+        function updateRefreshButton(left) {
+            refreshLeft = left;
+            refreshCount.textContent = `(剩余 ${left} 次)`;
+            btnRefresh.disabled = left <= 0;
         }
 
-        // 选择物品
-        function selectItem(itemName) {
-            selectedItem = itemName;
-
-            // 更新选中状态
-            document.querySelectorAll('.target-card').forEach(card => {
-                card.classList.remove('selected');
-                if (card.dataset.itemName === itemName) {
-                    card.classList.add('selected');
-                }
-            });
-
-            btnNext.disabled = false;
+        // 显示选词面板
+        function showWordSelector(candidates, left) {
+            selectedIndex = null;
+            selectedWord = null;
+            btnNext.disabled = true;
+            renderCandidates(candidates);
+            updateRefreshButton(left);
+            targetModal.classList.add('show');
         }
 
-        // 渲染确认步骤
-        function renderConfirmation() {
-            if (!selectedCategory || !selectedItem) return;
-
-            targetGrid.innerHTML = `
-                <div class="target-card selected" style="grid-column: 1 / -1; max-width: 300px; margin: 0 auto;">
-                    <div class="target-card-icon" style="font-size: 48px;">${selectedCategory.icon}</div>
-                    <div class="target-card-name" style="font-size: 20px; margin-top: 12px;">${selectedItem}</div>
-                    <div style="margin-top: 8px; color: var(--text-secondary); font-size: 12px;">
-                        分类: ${selectedCategory.name}
-                    </div>
-                </div>
-            `;
-            btnNext.textContent = '开始绘画';
-            btnNext.disabled = false;
-        }
-
-        // 更新步骤指示器
-        function updateStepIndicators() {
-            stepDot1.className = `step-dot ${currentStep === 1 ? 'active' : currentStep > 1 ? 'completed' : ''}`;
-            stepDot2.className = `step-dot ${currentStep === 2 ? 'active' : currentStep > 2 ? 'completed' : ''}`;
-            stepDot3.className = `step-dot ${currentStep === 3 ? 'active' : ''}`;
-        }
-
-        // 下一步
+        // 开始绘画
         btnNext.addEventListener('click', () => {
-            if (currentStep === 1 && selectedCategory) {
-                currentStep = 2;
-                modalSubtitle.textContent = '第2步：选择具体物品';
-                renderItems();
-                btnPrev.style.display = 'block';
-                btnNext.disabled = true;
-                updateStepIndicators();
-            } else if (currentStep === 2 && selectedItem) {
-                currentStep = 3;
-                modalSubtitle.textContent = '第3步：确认绘画目标';
-                renderConfirmation();
-                updateStepIndicators();
-            } else if (currentStep === 3) {
-                // 关闭弹窗，开始绘画
-                targetModal.classList.remove('show');
-                currentTarget.classList.add('show');
-                currentTargetText.textContent = `正在绘画: ${selectedItem}`;
-                
-                // 将选择的词语同步给服务器
-                if (socketClient && socketClient.roomCode) {
-                    socketClient.selectWord(selectedItem);
+            if (!selectedWord) return;
+
+            // 关闭弹窗，显示绘画目标
+            targetModal.classList.remove('show');
+            currentTarget.classList.add('show');
+            currentTargetText.textContent = `正在绘画: ${selectedWord}`;
+
+            // 将选择的词语同步给服务器
+            if (socketClient && socketClient.roomCode) {
+                socketClient.selectWord(selectedWord);
+            }
+        });
+
+        // 刷新候选词汇
+        btnRefresh.addEventListener('click', async () => {
+            if (refreshLeft <= 0) return;
+
+            btnRefresh.disabled = true;
+            try {
+                const response = await socketClient.refreshWords();
+                if (response.candidates) {
+                    selectedIndex = null;
+                    selectedWord = null;
+                    btnNext.disabled = true;
+                    renderCandidates(response.candidates);
+                    updateRefreshButton(response.refreshLeft);
                 }
-                
-                // 启动弹幕流
-                setTimeout(startBarrageStream, 1000);
+            } catch (error) {
+                console.error('刷新词汇失败:', error);
+                alert(error.message || '刷新失败');
+                updateRefreshButton(refreshLeft);
             }
         });
-
-        // 上一步
-        btnPrev.addEventListener('click', () => {
-            if (currentStep === 2) {
-                currentStep = 1;
-                modalSubtitle.textContent = '第1步：选择一个分类';
-                renderCategories();
-                btnPrev.style.display = 'none';
-                btnNext.disabled = selectedCategory === null;
-                selectedItem = null;
-                updateStepIndicators();
-            } else if (currentStep === 3) {
-                currentStep = 2;
-                modalSubtitle.textContent = '第2步：选择具体物品';
-                renderItems();
-                btnNext.textContent = '下一步';
-                btnNext.disabled = selectedItem === null;
-                updateStepIndicators();
-            }
-        });
-
-        // 当前流程由服务端自动分配词汇，不再需要页面加载时弹出选择面板
-        // 如需恢复手动选词，可重新启用下面的逻辑
-        // window.addEventListener('load', () => {
-        //     setTimeout(() => {
-        //         targetModal.classList.add('show');
-        //         renderCategories();
-        //     }, 500);
-        // });
     </script>
 
     <!-- Socket.io -->
@@ -2471,33 +2470,8 @@
                 await socketClient.connect();
                 console.log('绘画者已连接到服务器');
 
-                // 绘画者也需要加入房间以同步状态
-                const joinResponse = await socketClient.joinRoom(roomCode, playerName, null, playerAvatar);
-                console.log('绘画者已加入房间:', socketClient.roomCode);
-                if (joinResponse && joinResponse.room) {
-                    currentPlayers = joinResponse.room.players || [];
-                    lastRoomStatus = joinResponse.room.status || '';
-
-                    // 状态机校验：确保当前页面与房间状态匹配
-                    const shouldStay = GameState.enforce(
-                        joinResponse.room,
-                        socketClient.playerId,
-                        'painter',
-                        {
-                            roomCode: roomCode,
-                            roomName: roomName || '',
-                            playerName: playerName,
-                            playerAvatar: playerAvatar || ''
-                        }
-                    );
-                    if (!shouldStay) return;
-                }
-
-                // 如果用户已经在连接完成前选择了词语，同步给服务器
-                if (selectedItem) {
-                    console.log('同步已选词语给服务器:', selectedItem);
-                    socketClient.selectWord(selectedItem);
-                }
+                // ===== 先注册所有 socket 事件监听，再 joinRoom =====
+                // 这样服务器在 joinRoom 回调中同步的事件（如 wordCandidates）才不会丢失
 
                 // 监听房间数据更新
                 socketClient.on('roomUpdate', (room) => {
@@ -2557,6 +2531,12 @@
                     addBarrage(message, playerName, getAvatarColor(playerName), playerAvatar);
                 });
 
+                // 监听候选词汇列表（只有绘画者能收到）
+                socketClient.on('wordCandidates', ({ candidates, refreshLeft }) => {
+                    console.log('收到候选词汇:', candidates, '剩余刷新次数:', refreshLeft);
+                    showWordSelector(candidates, refreshLeft);
+                });
+
                 // 监听绘画者专用词汇（只有绘画者能收到）
                 socketClient.on('painterWord', ({ word, category, hint }) => {
                     currentWord = word;
@@ -2574,8 +2554,8 @@
                 });
 
                 // 监听回合开始（绘画者切换）
-                socketClient.on('roundStarted', ({ round, totalRounds, painterId, timer }) => {
-                    console.log('回合开始:', round, '绘画者:', painterId);
+                socketClient.on('roundStarted', ({ round, totalRounds, painterId, timer, selecting }) => {
+                    console.log('回合开始:', round, '绘画者:', painterId, '选择中:', selecting);
 
                     // 判断当前用户是否还是绘画者
                     if (painterId !== socketClient.socket.id) {
@@ -2593,16 +2573,16 @@
                         window.location.replace(`guesser.html?${gameParams.toString()}`);
                     } else {
                         console.log('继续作为绘画者');
-                        // 确保绘画目标浮层可见
-                        if (currentTarget) {
-                            currentTarget.classList.add('show');
-                        }
                         // 更新回合信息显示
                         const roundBadge = document.getElementById('roundBadge');
                         if (roundBadge) {
                             roundBadge.textContent = `第 ${round} / ${totalRounds || 5} 回合`;
                         }
-                        if (timer !== undefined) {
+                        // 选择词汇阶段不显示目标浮层，等待绘画者选择
+                        if (!selecting && currentTarget) {
+                            currentTarget.classList.add('show');
+                        }
+                        if (timer !== undefined && !selecting) {
                             updatePainterTimer(timer);
                         }
                     }
@@ -2630,6 +2610,28 @@
                     alert(message || '房主已离开，房间已销毁');
                     window.location.replace('lobby.html');
                 });
+
+                // 绘画者也需要加入房间以同步状态
+                const joinResponse = await socketClient.joinRoom(roomCode, playerName, null, playerAvatar);
+                console.log('绘画者已加入房间:', socketClient.roomCode);
+                if (joinResponse && joinResponse.room) {
+                    currentPlayers = joinResponse.room.players || [];
+                    lastRoomStatus = joinResponse.room.status || '';
+
+                    // 状态机校验：确保当前页面与房间状态匹配
+                    const shouldStay = GameState.enforce(
+                        joinResponse.room,
+                        socketClient.playerId,
+                        'painter',
+                        {
+                            roomCode: roomCode,
+                            roomName: roomName || '',
+                            playerName: playerName,
+                            playerAvatar: playerAvatar || ''
+                        }
+                    );
+                    if (!shouldStay) return;
+                }
 
             } catch (error) {
                 console.error('连接失败:', error);
