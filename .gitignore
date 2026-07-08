@@ -29,6 +29,10 @@ tmp/
 temp/
 *.tmp
 
+# ===== 打包产物（不提交到 Git）=====
+dist/
+*.exe
+
 # ===== 用户上传词库(未来功能) =====
 server/user-packs/
 
