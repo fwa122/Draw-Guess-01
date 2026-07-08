@@ -110,8 +110,8 @@ function createPlayerCard(player, seatIndex) {
     // 第一个座位（首位绘画者）特殊样式
     const isFirstSeat = seatIndex === 0;
 
-    // 是否是当前玩家的卡片
-    const isCurrentPlayer = player.name === playerName;
+    // 是否是当前玩家的卡片（按 id 匹配，避免同名玩家冲突）
+    const isCurrentPlayer = player.id === socketClient.playerId;
 
     // 是否是当前绘画者
     const isPainter = currentRoomData && currentRoomData.currentPainter === (player.id || player.socketId);
@@ -212,7 +212,7 @@ function handleSwapSeat(targetSeatIndex) {
     }
 
     // 找到当前玩家
-    currentPlayer = roomPlayers.find(p => p.name === playerName);
+    currentPlayer = roomPlayers.find(p => p.id === socketClient.playerId);
     if (!currentPlayer) {
         console.log('找不到当前玩家');
         return;
@@ -250,7 +250,7 @@ async function refreshRoomData() {
                 console.log('刷新房间数据成功:', response.room);
                 currentRoomData = response.room;
                 roomPlayers = response.room.players || [];
-                currentPlayer = roomPlayers.find(p => p.name === playerName);
+                currentPlayer = roomPlayers.find(p => p.id === socketClient.playerId);
                 renderPlayers(roomPlayers, currentRoomData);
                 updateRoomInfo(currentRoomData);
             }
@@ -309,13 +309,18 @@ function startGame() {
     }
 
     // 通过Socket.io开始游戏
-    socketClient.startGame(currentRoomData.code, (response) => {
-        if (response.success) {
-            console.log('游戏开始');
-        } else {
-            alert(response.message || '开始游戏失败');
-        }
-    });
+    socketClient.startGame(currentRoomData.code)
+        .then((response) => {
+            if (response && response.success) {
+                console.log('游戏开始');
+            } else {
+                alert((response && response.message) || '开始游戏失败');
+            }
+        })
+        .catch((error) => {
+            console.error('开始游戏失败:', error);
+            alert(error.message || '开始游戏失败');
+        });
 }
 
 // ===== 页面加载时初始化 =====
@@ -389,7 +394,7 @@ async function initSocket() {
                 console.log('成功加入房间:', response.room, response.isReconnect ? '(重连)' : '(新加入)');
                 currentRoomData = response.room;
                 roomPlayers = response.room.players || [];
-                currentPlayer = roomPlayers.find(p => p.name === playerName);
+                currentPlayer = roomPlayers.find(p => p.id === socketClient.playerId);
 
                 // 状态机校验：若房间正在游戏中，自动跳转到对应游戏页
                 const shouldStay = GameState.enforce(
@@ -422,7 +427,7 @@ async function initSocket() {
             console.log('房间数据更新:', room);
             currentRoomData = room;
             roomPlayers = room.players || [];
-            currentPlayer = roomPlayers.find(p => p.name === playerName) || currentPlayer;
+            currentPlayer = roomPlayers.find(p => p.id === socketClient.playerId) || currentPlayer;
 
             // 状态机校验：若房间已开始游戏，自动跳转
             const shouldStay = GameState.enforce(
@@ -466,17 +471,6 @@ async function initSocket() {
             renderPlayers(roomPlayers, currentRoomData);
         });
 
-        // 监听玩家准备状态变化（备用，主要通过 roomUpdate 同步）
-        socketClient.on('playerReady', ({ playerId, ready }) => {
-            console.log('玩家准备状态变化:', playerId, ready);
-            const player = roomPlayers.find(p => p.id === playerId || p.socketId === playerId);
-            if (player) {
-                player.status = ready ? 'ready' : 'waiting';
-            }
-            renderPlayers(roomPlayers, currentRoomData);
-            updateButtons();
-        });
-
         // 监听游戏开始
         socketClient.on('gameStarted', ({ room, currentWord }) => {
             console.log('游戏开始:', room, currentWord);
@@ -497,11 +491,6 @@ async function initSocket() {
 
             const targetPage = isPainter ? 'painter.html' : 'guesser.html';
             window.location.replace(`${targetPage}?${gameParams.toString()}`);
-        });
-
-        // 监听开始游戏失败
-        socketClient.on('startFailed', ({ message }) => {
-            alert(message || '开始游戏失败');
         });
 
     } catch (error) {

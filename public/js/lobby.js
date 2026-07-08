@@ -17,7 +17,12 @@ function renderRooms(rooms) {
     if (rooms.length === 0) {
         roomsGrid.innerHTML = `
             <div style="text-align: center; padding: 60px; color: var(--text-secondary);">
-                <div style="font-size: 48px; margin-bottom: 16px;">🔍</div>
+                <div style="font-size: 48px; margin-bottom: 16px; display: flex; justify-content: center;">
+                    <svg viewBox="0 0 24 24" width="48" height="48" stroke="currentColor" stroke-width="1.5" fill="none">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="m21 21-4.35-4.35"/>
+                    </svg>
+                </div>
                 <div style="font-size: 16px;">暂无符合条件的房间</div>
             </div>
         `;
@@ -129,7 +134,7 @@ function renderRooms(rooms) {
                             <circle cx="17" cy="12" r="2"></circle>
                         </svg>
                     </span>
-                    <span>模式: ${room.type === 'classic' || !room.type ? '经典' : room.type === 'speed' ? '速猜' : room.type}</span>
+                    <span>模式: 经典</span>
                 </div>
                 ${room.isPrivate ? '<div class="room-info-row"><span class="room-info-icon"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span><span>私密房间</span></div>' : ''}
             </div>
@@ -260,6 +265,7 @@ btnConfirmCreate.addEventListener('click', async () => {
         name: roomName,
         maxPlayers: parseInt(document.getElementById('maxPlayers').value) || 6,
         roundTime: parseInt(document.getElementById('roundTime').value) || 90,
+        gameMode: document.getElementById('gameMode').value || 'classic',
         type: document.getElementById('roomType').value === 'private' ? '私密' : '经典模式',
         isPrivate: document.getElementById('roomType').value === 'private',
         password: document.getElementById('roomPassword').value || '',
@@ -496,14 +502,6 @@ async function initSocket() {
         // 监听房间列表更新
         socketClient.on('roomList', (rooms) => {
             console.log('房间列表更新:', rooms);
-            allRooms = rooms;
-            filteredRooms = rooms;
-            renderRooms(rooms);
-        });
-
-        // 监听 roomsUpdate 事件（备用）
-        socketClient.on('roomsUpdate', (rooms) => {
-            console.log('房间列表更新(roomsUpdate):', rooms);
             allRooms = rooms;
             filteredRooms = rooms;
             renderRooms(rooms);

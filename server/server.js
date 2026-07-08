@@ -2,6 +2,8 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs');
+const { exec } = require('child_process');
 const wordBank = require('./words/wordBank');
 
 const app = express();
@@ -15,7 +17,14 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 3000;
 
-app.use(express.static(path.join(__dirname, '../public')));
+// 优先使用与可执行文件同级的 public 目录，便于外部替换资源；打包时回退到快照内的 public
+const publicPath = (() => {
+    const besideExe = path.join(path.dirname(process.execPath), 'public');
+    if (fs.existsSync(besideExe)) return besideExe;
+    return path.join(__dirname, '../public');
+})();
+
+app.use(express.static(publicPath));
 
 // 添加根路径重定向到大厅页面
 app.get('/', (req, res) => {
@@ -106,7 +115,8 @@ function validateRoomOptions(options) {
         return { valid: false, message: '绘画时间应在 10-300 秒之间' };
     }
 
-    const allowedModes = ['classic', 'private', 'ranked'];
+    // 当前仅支持经典模式
+    const allowedModes = ['classic'];
     const gameMode = options.gameMode || 'classic';
     if (!allowedModes.includes(gameMode)) {
         return { valid: false, message: '未知的游戏模式' };
@@ -166,6 +176,10 @@ function handleNextRound(roomCode) {
     // 筛选在线玩家作为候选绘画者
     if (onlinePlayers.length < 2) {
         stopRoundTimer(roomCode);
+        if (room.painterSwitchTimer) {
+            clearTimeout(room.painterSwitchTimer);
+            room.painterSwitchTimer = null;
+        }
         io.to(roomCode).emit('roomDestroyed', { message: '在线玩家不足，游戏结束' });
         rooms.delete(roomCode);
         return;
@@ -220,6 +234,7 @@ function handleNextRound(roomCode) {
 
 const rooms = new Map();
 const lastCanvasEmit = new Map(); // 绘画事件限频缓存
+const messageRateLimit = new Map(); // 聊天/猜词消息限频缓存
 
 // 生成公开房间列表（不含 currentWord 等敏感字段）
 function getPublicRoomList() {
@@ -279,6 +294,12 @@ function resetRoomToWaiting(roomCode) {
 
     stopRoundTimer(roomCode); // 重置时确保计时器停止
 
+    // 清理绘画者掉线宽限期定时器
+    if (room.painterSwitchTimer) {
+        clearTimeout(room.painterSwitchTimer);
+        room.painterSwitchTimer = null;
+    }
+
     if (!transitionRoomStatus(room, ROOM_STATUS.WAITING)) {
         return;
     }
@@ -291,9 +312,9 @@ function resetRoomToWaiting(roomCode) {
     room.guessRankings = [];
 
     room.players.forEach(p => {
-        if (p.status !== 'offline') {
-            p.status = 'waiting';
-        }
+        // 离线玩家也一并重置，避免重连后出现状态/分数不一致
+        // 房主自动设为 ready，避免游戏结束后无法立即重新开始
+        p.status = p.isHost ? 'ready' : 'waiting';
         p.score = 0;
         if (room.scores) {
             room.scores[p.id] = 0;
@@ -325,6 +346,27 @@ function censorWord(message, word) {
     const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const regex = new RegExp(escaped, 'g');
     return message.replace(regex, '***');
+}
+
+// 聊天/猜词消息限流：每个 socket 在 1 秒内最多发送 3 条
+function checkMessageRateLimit(socketId) {
+    const now = Date.now();
+    const windowSize = 1000;
+    const maxCount = 3;
+
+    let record = messageRateLimit.get(socketId);
+    if (!record || now - record.windowStart >= windowSize) {
+        record = { windowStart: now, count: 1 };
+        messageRateLimit.set(socketId, record);
+        return true;
+    }
+
+    if (record.count >= maxCount) {
+        return false;
+    }
+
+    record.count++;
+    return true;
 }
 
 // 生成绘画者候选词汇列表（同一批次内不重复，每次刷新独立随机）
@@ -476,7 +518,8 @@ io.on('connection', (socket) => {
             const oldId = existingPlayer.id;
             // 更新现有玩家的 socket.id 和状态
             existingPlayer.id = socket.id;
-            existingPlayer.status = existingPlayer.isHost ? 'ready' : 'waiting';
+            // 根据房间状态恢复玩家状态：游戏中则恢复为 playing，等待中按原逻辑处理
+            existingPlayer.status = room.status === ROOM_STATUS.PLAYING ? 'playing' : (existingPlayer.isHost ? 'ready' : 'waiting');
             existingPlayer.avatar = playerAvatar || existingPlayer.avatar || playerName[0];
             // 允许重连时更新昵称，但身份标识保持不变
             if (playerName) {
@@ -489,9 +532,14 @@ io.on('connection', (socket) => {
                 existingPlayer.offlineTimer = null;
             }
 
-            // 如果该玩家是当前绘画者，更新房间的 currentPainter ID
+            // 如果该玩家是当前绘画者，更新房间的 currentPainter ID 并取消回合切换宽限期
             if (room.currentPainter === oldId) {
                 room.currentPainter = socket.id;
+                if (room.painterSwitchTimer) {
+                    clearTimeout(room.painterSwitchTimer);
+                    room.painterSwitchTimer = null;
+                    console.log(`绘画者 ${existingPlayer.name} 重连，取消回合切换`);
+                }
             }
 
             // 迁移分数记录：把旧 socket.id 的分数转到新的 socket.id，避免脏 key 累积
@@ -698,13 +746,15 @@ io.on('connection', (socket) => {
         if (waitingRooms.length === 0) {
             // 没有可加入的房间，创建一个新房间
             const roomCode = 'QM' + Date.now().toString(36).toUpperCase();
+            const playerName = '玩家' + Math.floor(Math.random() * 10000);
             const player = {
                 id: socket.id,
-                name: '玩家' + Math.floor(Math.random() * 10000),
+                clientId: socket.id,
+                name: playerName,
                 isHost: true,
                 status: 'ready',
                 score: 0,
-                avatar: '👤'
+                avatar: playerName[0]
             };
 
             const room = {
@@ -712,18 +762,27 @@ io.on('connection', (socket) => {
                 name: '快速匹配房间',
                 maxPlayers: 6,
                 roundTime: 90,
-                status: 'waiting',
+                gameMode: 'classic',
+                isPrivate: false,
+                password: null,
                 players: [player],
-                scores: { [socket.id]: 0 }
+                status: 'waiting',
+                currentRound: 0,
+                maxRounds: 5,
+                currentPainter: null,
+                currentWord: null,
+                wordPackId: 'default',
+                scores: { [socket.id]: 0 },
+                guessRankings: []
             };
 
             socket.join(roomCode);
             rooms.set(roomCode, room);
 
             if (callback) {
-                callback({ 
-                    success: true, 
-                    room, 
+                callback({
+                    success: true,
+                    room: getRoomSnapshot(room),
                     playerName: player.name,
                     playerAvatar: player.avatar
                 });
@@ -731,13 +790,15 @@ io.on('connection', (socket) => {
         } else {
             // 加入一个现有房间
             const room = waitingRooms[0];
+            const playerName = '玩家' + Math.floor(Math.random() * 10000);
             const player = {
                 id: socket.id,
-                name: '玩家' + Math.floor(Math.random() * 10000),
+                clientId: socket.id,
+                name: playerName,
                 isHost: false,
                 status: 'waiting',
                 score: 0,
-                avatar: '👤'
+                avatar: playerName[0]
             };
 
             room.players.push(player);
@@ -747,9 +808,9 @@ io.on('connection', (socket) => {
             socket.to(room.code).emit('playerJoined', player);
 
             if (callback) {
-                callback({ 
-                    success: true, 
-                    room,
+                callback({
+                    success: true,
+                    room: getRoomSnapshot(room),
                     playerName: player.name,
                     playerAvatar: player.avatar
                 });
@@ -818,6 +879,12 @@ io.on('connection', (socket) => {
         const room = rooms.get(roomCode);
         if (!room) {
             if (callback) callback({ success: false, message: '房间不存在' });
+            return;
+        }
+
+        // 防止游戏已经开始后重复触发
+        if (room.status !== ROOM_STATUS.WAITING) {
+            if (callback) callback({ success: false, message: '房间当前状态无法开始游戏' });
             return;
         }
 
@@ -896,6 +963,12 @@ io.on('connection', (socket) => {
         const room = rooms.get(roomCode);
         if (!room) return;
 
+        // 只有当前绘画者才能广播画布更新
+        if (socket.id !== room.currentPainter) {
+            console.log(`[canvasUpdate] 非绘画者不能更新画布: ${socket.id}`);
+            return;
+        }
+
         // 限频：每个 socket 在每个房间每 30ms 最多转发一次
         const key = `${socket.id}:${roomCode}`;
         const now = Date.now();
@@ -920,9 +993,16 @@ io.on('connection', (socket) => {
             return;
         }
 
+        // 兼容旧客户端可能把候选词对象整个发过来；只取字符串词面
+        const wordText = typeof word === 'string' ? word : (word && word.word);
+        if (!wordText || typeof wordText !== 'string') {
+            console.log(`[selectWord] 无效的词语格式: ${roomCode}`);
+            return;
+        }
+
         // 在候选词中查找完整信息
-        const matchedCandidate = room.wordCandidates && room.wordCandidates.find(c => c.word === word);
-        room.currentWord = matchedCandidate || { category: '自定义', word: word, hint: null };
+        const matchedCandidate = room.wordCandidates && room.wordCandidates.find(c => c.word === wordText);
+        room.currentWord = matchedCandidate || { category: '自定义', word: wordText, hint: null };
         console.log(`[selectWord] 绘画者选择词语: "${room.currentWord.word}"，房间: ${roomCode}`);
 
         // 向所有人广播回合开始（包含提示信息，不暴露答案）
@@ -994,6 +1074,12 @@ io.on('connection', (socket) => {
         const player = room.players.find(p => p.id === socket.id);
         if (!player) {
             console.log(`[guess] 玩家不存在: ${socket.id}`);
+            return;
+        }
+
+        // 消息限流
+        if (!checkMessageRateLimit(socket.id)) {
+            console.log(`[guess] 消息发送过于频繁: ${socket.id}`);
             return;
         }
 
@@ -1125,6 +1211,12 @@ io.on('connection', (socket) => {
         const player = room.players.find(p => p.id === socket.id);
         if (!player) return;
 
+        // 消息限流
+        if (!checkMessageRateLimit(socket.id)) {
+            console.log(`[chatMessage] 消息发送过于频繁: ${socket.id}`);
+            return;
+        }
+
         const trimmed = String(message || '').trim();
         if (!trimmed || trimmed.length > 100) {
             return;
@@ -1158,12 +1250,16 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         console.log(`玩家断开连接: ${socket.id}`);
-        
+
+        // 清理该 socket 的消息限频缓存
+        messageRateLimit.delete(socket.id);
+
         // 标记玩家为离线，但不立即销毁房间
         for (const [roomCode, room] of rooms) {
             const playerIndex = room.players.findIndex(p => p.id === socket.id);
             if (playerIndex !== -1) {
                 const player = room.players[playerIndex];
+                const wasPainter = room.currentPainter === socket.id && room.status === ROOM_STATUS.PLAYING;
                 player.status = 'offline';
                 player.disconnectTime = Date.now();
 
@@ -1172,7 +1268,32 @@ io.on('connection', (socket) => {
 
                 console.log(`玩家离线: ${player.name} in ${roomCode}`);
                 broadcastRoomUpdate(roomCode);
-                
+
+                // 如果绘画者在游戏中掉线，给予短暂宽限期（页面跳转会快速重连）
+                if (wasPainter) {
+                    console.log(`绘画者 ${player.name} 掉线，启动回合切换宽限期`);
+                    if (room.painterSwitchTimer) {
+                        clearTimeout(room.painterSwitchTimer);
+                        room.painterSwitchTimer = null;
+                    }
+                    room.painterSwitchTimer = setTimeout(() => {
+                        // 宽限期结束后仍未重连，才真正切换回合
+                        const currentPainter = room.players.find(p => p.id === room.currentPainter);
+                        if (!currentPainter || currentPainter.status === 'offline') {
+                            console.log(`绘画者 ${player.name} 宽限期结束，切换回合`);
+                            stopRoundTimer(roomCode);
+                            io.to(roomCode).emit('chatMessage', {
+                                playerName: '系统',
+                                message: '当前绘画者已掉线，本回合结束。',
+                                isSystem: true,
+                                timestamp: Date.now()
+                            });
+                            handleNextRound(roomCode);
+                        }
+                        room.painterSwitchTimer = null;
+                    }, 5000);
+                }
+
                 // 针对房主和普通玩家设置不同的超时处理
                 if (player.isHost) {
                     // 房主掉线：给予较短的重连时间（例如 60秒），超时则销毁房间
@@ -1180,6 +1301,10 @@ io.on('connection', (socket) => {
                         const stillOfflineHost = room.players.find(p => p.id === socket.id && p.status === 'offline' && p.isHost);
                         if (stillOfflineHost) {
                             stopRoundTimer(roomCode);
+                            if (room.painterSwitchTimer) {
+                                clearTimeout(room.painterSwitchTimer);
+                                room.painterSwitchTimer = null;
+                            }
                             io.to(roomCode).emit('roomDestroyed', { message: '房主掉线超时，房间已销毁' });
                             rooms.delete(roomCode);
                             broadcastRoomList();
@@ -1208,6 +1333,10 @@ io.on('connection', (socket) => {
 
                         if (currentRoom.players.length === 0) {
                             stopRoundTimer(roomCode);
+                            if (currentRoom.painterSwitchTimer) {
+                                clearTimeout(currentRoom.painterSwitchTimer);
+                                currentRoom.painterSwitchTimer = null;
+                            }
                             rooms.delete(roomCode);
                             console.log(`房间空置超时，自动销毁: ${roomCode}`);
                         } else {
@@ -1222,9 +1351,44 @@ io.on('connection', (socket) => {
     });
 });
 
+server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        const lines = [
+            `端口 ${PORT} 已被占用，无法启动游戏服务器。`,
+            '',
+            '请检查：',
+            `1. 是否已经双击运行了 你画我猜.exe（只能运行一个）`,
+            `2. 是否还有其他程序占用了端口 ${PORT}`
+        ];
+        console.error(lines.join('\n'));
+
+        // 在 Windows 上弹出消息框，避免黑框一闪而过
+        if (process.platform === 'win32') {
+            const psMessage = lines.join('`n');
+            exec(`powershell -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('${psMessage}', '启动失败', 'OK', 'Error')"`, () => {
+                process.exit(1);
+            });
+        } else {
+            process.exit(1);
+        }
+    } else {
+        console.error('服务器启动失败:', err);
+        process.exit(1);
+    }
+});
+
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`服务器运行在 http://localhost:${PORT}`);
-    console.log(`局域网访问地址: http://${getLocalIP()}:${PORT}`);
+    const localUrl = `http://localhost:${PORT}`;
+    const lanUrl = `http://${getLocalIP()}:${PORT}`;
+    console.log(`服务器运行在 ${localUrl}`);
+    console.log(`局域网访问地址: ${lanUrl}`);
+
+    // 自动打开默认浏览器（仅在 Windows 打包运行时生效，node 命令运行时不影响）
+    if (process.platform === 'win32') {
+        exec(`start ${localUrl}`, (err) => {
+            if (err) console.log('自动打开浏览器失败，请手动访问上述地址');
+        });
+    }
 });
 
 function getLocalIP() {

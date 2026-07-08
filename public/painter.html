@@ -964,6 +964,23 @@
             }
         }
 
+        /* 弹幕响应式适配 */
+        @media (max-width: 1200px) {
+            .barrage-container {
+                left: 110px;
+                right: 90px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .barrage-container {
+                left: 10px;
+                right: 10px;
+                top: 68px;
+                height: 100px;
+            }
+        }
+
         /* Tooltip */
         .tool-btn::after {
             content: attr(data-tooltip);
@@ -1016,8 +1033,8 @@
             position: fixed;
             left: 140px;
             right: 100px;
-            top: 20px;
-            height: 80px;
+            top: 72px;
+            height: 120px;
             pointer-events: none;
             z-index: 150;
             overflow: hidden;
@@ -1216,20 +1233,17 @@
         }
 
         .target-card.selected::after {
-            content: '✓';
+            content: '';
             position: absolute;
             top: 8px;
             right: 8px;
             width: 24px;
             height: 24px;
-            background: var(--accent-color);
+            background: var(--accent-color) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E") center/14px no-repeat;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: white;
-            font-size: 14px;
-            font-weight: 700;
         }
 
         /* 确认按钮 */
@@ -1411,7 +1425,7 @@
     <!-- 游戏结束排行榜弹窗 -->
     <div class="game-end-overlay" id="gameEndOverlay">
         <div class="game-end-popup">
-            <h2>🏆 游戏结束</h2>
+            <h2><svg viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" stroke-width="2" fill="none" style="vertical-align: middle; margin-right: 8px;"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>游戏结束</h2>
             <div class="game-end-subtitle">所有玩家都已完成绘画，最终排名如下</div>
             <div class="ranking-list" id="rankingList">
                 <!-- 动态加载排行榜 -->
@@ -1514,6 +1528,7 @@
                 <input type="color" class="color-picker" id="colorPicker" value="#6366f1">
             </div>
         </div>
+        <div class="current-color" id="currentColorDisplay" style="margin-top: 12px; font-size: 13px; color: var(--text-secondary); text-align: center;">#6366f1</div>
     </div>
     
     <!-- 画笔大小面板 -->
@@ -1828,10 +1843,23 @@
         // 初始化滑块位置
         updateSliderDot(currentSize);
 
+        function getPointerPos(e) {
+            if (e.touches && e.touches.length > 0) {
+                return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }
+            return { x: e.clientX, y: e.clientY };
+        }
+
         radialSlider.addEventListener('mousedown', (e) => {
             isDragging = true;
             handleSliderMove(e);
         });
+
+        radialSlider.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            isDragging = true;
+            handleSliderMove(e);
+        }, { passive: false });
 
         document.addEventListener('mousemove', (e) => {
             if (isDragging) {
@@ -1839,7 +1867,18 @@
             }
         });
 
+        document.addEventListener('touchmove', (e) => {
+            if (isDragging) {
+                e.preventDefault();
+                handleSliderMove(e);
+            }
+        }, { passive: false });
+
         document.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        document.addEventListener('touchend', () => {
             isDragging = false;
         });
 
@@ -1847,8 +1886,9 @@
             const rect = radialSlider.getBoundingClientRect();
             const centerX = rect.left + rect.width / 2;
             const centerY = rect.top + rect.height / 2;
-            
-            const angle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+            const pos = getPointerPos(e);
+
+            const angle = Math.atan2(pos.y - centerY, pos.x - centerX);
             let percentage = (angle + Math.PI / 2) / (2 * Math.PI);
             if (percentage < 0) percentage += 1;
             
@@ -2268,9 +2308,11 @@
             
             const barrage = createBarrage(player, comment);
 
-            // 设置随机垂直位置
-            const randomTop = Math.floor(Math.random() * 40);
-            barrage.style.top = `${randomTop}px`;
+            // 使用多车道轮询，避免弹幕严重重叠
+            const lanes = [5, 45, 85];
+            window.barrageLaneIndex = (window.barrageLaneIndex || 0) + 1;
+            const laneTop = lanes[window.barrageLaneIndex % lanes.length];
+            barrage.style.top = `${laneTop}px`;
 
             barrageContainer.appendChild(barrage);
             barrageItems.push(barrage);
@@ -2387,13 +2429,14 @@
             if (!selectedWord) return;
 
             // 关闭弹窗，显示绘画目标
+            const wordToSend = typeof selectedWord === 'string' ? selectedWord : (selectedWord && selectedWord.word);
             targetModal.classList.remove('show');
             currentTarget.classList.add('show');
-            currentTargetText.textContent = `正在绘画: ${selectedWord}`;
+            currentTargetText.textContent = `正在绘画: ${wordToSend || ''}`;
 
-            // 将选择的词语同步给服务器
-            if (socketClient && socketClient.roomCode) {
-                socketClient.selectWord(selectedWord);
+            // 将选择的词语同步给服务器（只发送字符串，不要发送对象）
+            if (socketClient && socketClient.roomCode && wordToSend) {
+                socketClient.selectWord(wordToSend);
             }
         });
 
