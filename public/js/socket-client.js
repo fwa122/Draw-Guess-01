@@ -78,7 +78,14 @@ class SocketClient {
             'roomList',
             'roomUpdate',
             'roundEnded',
-            'roomDestroyed'
+            'roomDestroyed',
+            // 矢量笔迹同步事件
+            'stroke',
+            'strokeIncrement',
+            'strokeBatch',
+            'canvasSnapshot',
+            'clearCanvas',
+            'areaErase'
         ];
 
         events.forEach(event => {
@@ -188,6 +195,50 @@ class SocketClient {
     sendCanvasUpdate(data, roomCode = this.roomCode) {
         if (this.socket) {
             this.socket.emit('canvasUpdate', { roomCode, data });
+        }
+    }
+
+    // ===== 矢量笔迹同步方法 =====
+
+    // 发送完整笔迹（笔画结束时）
+    sendStroke(stroke, roomCode = this.roomCode) {
+        if (this.socket) {
+            this.socket.emit('stroke', { roomCode, stroke });
+        }
+    }
+
+    // 发送笔迹增量（绘画过程中实时）
+    sendStrokeIncrement(strokeId, points, tool, color, width, roomCode = this.roomCode) {
+        if (this.socket) {
+            this.socket.emit('strokeIncrement', { roomCode, strokeId, points, tool, color, width });
+        }
+    }
+
+    // 发送画布快照（定期同步）
+    sendCanvasSnapshot(data, timestamp, roomCode = this.roomCode) {
+        if (this.socket) {
+            this.socket.emit('canvasSnapshot', { roomCode, data, timestamp });
+        }
+    }
+
+    // 请求画布同步（中途加入/重连）
+    requestCanvasSync(roomCode = this.roomCode) {
+        if (this.socket) {
+            this.socket.emit('requestCanvasSync', { roomCode });
+        }
+    }
+
+    // 发送清空画布操作
+    sendClearCanvas(timestamp, roomCode = this.roomCode) {
+        if (this.socket) {
+            this.socket.emit('clearCanvas', { roomCode, timestamp });
+        }
+    }
+
+    // 发送区域擦除操作
+    sendAreaErase(rect, timestamp, roomCode = this.roomCode) {
+        if (this.socket) {
+            this.socket.emit('areaErase', { roomCode, rect, timestamp });
         }
     }
 

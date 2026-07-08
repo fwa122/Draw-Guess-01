@@ -152,6 +152,9 @@ function handleNextRound(roomCode) {
 
     room.currentRound++;
     room.guessRankings = []; // 清空答题排名
+    // 新回合开始，清空笔迹历史和快照
+    room.strokeHistory = [];
+    room.lastSnapshot = null;
 
     // 一轮游戏结束条件：所有在线玩家都绘画过一次
     const onlinePlayers = room.players.filter(p => p.status !== 'offline');
@@ -310,6 +313,9 @@ function resetRoomToWaiting(roomCode) {
     room.wordCandidates = null;
     room.refreshLeft = 0;
     room.guessRankings = [];
+    // 清空笔迹历史和快照
+    room.strokeHistory = [];
+    room.lastSnapshot = null;
 
     room.players.forEach(p => {
         // 离线玩家也一并重置，避免重连后出现状态/分数不一致
@@ -464,7 +470,10 @@ io.on('connection', (socket) => {
             currentWord: null,
             wordPackId: options.wordPackId || 'default',
             scores: {},
-            guessRankings: [] // 本回合答对玩家的排名列表
+            guessRankings: [], // 本回合答对玩家的排名列表
+            // 矢量笔迹同步相关字段
+            strokeHistory: [], // 本回合所有笔迹历史
+            lastSnapshot: null // 最 recent 的画布快照 { data, timestamp }
         };
 
         // 房主作为第一个玩家加入
@@ -773,7 +782,10 @@ io.on('connection', (socket) => {
                 currentWord: null,
                 wordPackId: 'default',
                 scores: { [socket.id]: 0 },
-                guessRankings: []
+                guessRankings: [],
+                // 矢量笔迹同步相关字段
+                strokeHistory: [],
+                lastSnapshot: null
             };
 
             socket.join(roomCode);
@@ -906,6 +918,9 @@ io.on('connection', (socket) => {
         }
 
         room.currentRound = 1;
+        // 游戏开始，初始化笔迹历史和快照
+        room.strokeHistory = [];
+        room.lastSnapshot = null;
         // 按照座位顺序选择第一个绘画者（seatIndex 为 0 的玩家）
         const sortedPlayers = room.players
             .filter(p => p.status === 'ready')
@@ -977,6 +992,108 @@ io.on('connection', (socket) => {
         lastCanvasEmit.set(key, now);
 
         socket.to(roomCode).emit('canvasUpdate', { playerId: socket.id, data });
+    });
+
+    // ===== 矢量笔迹同步事件 =====
+
+    // 接收完整笔迹（笔画结束时发送）
+    socket.on('stroke', ({ roomCode, stroke }) => {
+        const room = rooms.get(roomCode);
+        if (!room) return;
+
+        // 只有当前绘画者才能发送笔迹
+        if (socket.id !== room.currentPainter) {
+            console.log(`[stroke] 非绘画者不能发送笔迹: ${socket.id}`);
+            return;
+        }
+
+        // 存储笔迹到房间历史
+        room.strokeHistory.push(stroke);
+        // 限制历史长度，避免内存过大
+        if (room.strokeHistory.length > 2000) {
+            room.strokeHistory.shift();
+        }
+
+        // 转发给房间内所有竞猜者（不包括绘画者自己）
+        socket.to(roomCode).emit('stroke', stroke);
+    });
+
+    // 接收笔迹增量（绘画过程中实时发送）
+    socket.on('strokeIncrement', ({ roomCode, strokeId, points, tool, color, width }) => {
+        const room = rooms.get(roomCode);
+        if (!room) return;
+
+        if (socket.id !== room.currentPainter) return;
+
+        // 实时转发给竞猜者（低延迟）
+        socket.to(roomCode).emit('strokeIncrement', { strokeId, points, tool, color, width });
+    });
+
+    // 接收画布快照（定期发送，用于中途加入同步）
+    socket.on('canvasSnapshot', ({ roomCode, data, timestamp }) => {
+        const room = rooms.get(roomCode);
+        if (!room) return;
+
+        if (socket.id !== room.currentPainter) return;
+
+        // 更新房间快照
+        room.lastSnapshot = { data, timestamp };
+
+        // 转发给所有竞猜者
+        socket.to(roomCode).emit('canvasSnapshot', { data, timestamp });
+    });
+
+    // 竞猜者请求画布同步（中途加入或重连）
+    socket.on('requestCanvasSync', ({ roomCode }) => {
+        const room = rooms.get(roomCode);
+        if (!room) return;
+
+        // 先发送最新快照
+        if (room.lastSnapshot) {
+            socket.emit('canvasSnapshot', room.lastSnapshot);
+        }
+
+        // 再发送快照之后的笔迹
+        const snapshotTime = room.lastSnapshot?.timestamp || 0;
+        const recentStrokes = room.strokeHistory.filter(s => s.timestamp > snapshotTime);
+
+        if (recentStrokes.length > 0) {
+            socket.emit('strokeBatch', recentStrokes);
+        }
+    });
+
+    // 清空画布操作
+    socket.on('clearCanvas', ({ roomCode, timestamp }) => {
+        const room = rooms.get(roomCode);
+        if (!room) return;
+
+        if (socket.id !== room.currentPainter) return;
+
+        // 记录清空操作
+        room.strokeHistory.push({ type: 'clear', timestamp });
+        if (room.strokeHistory.length > 2000) {
+            room.strokeHistory.shift();
+        }
+
+        // 转发给竞猜者
+        socket.to(roomCode).emit('clearCanvas', { timestamp });
+    });
+
+    // 区域擦除操作
+    socket.on('areaErase', ({ roomCode, rect, timestamp }) => {
+        const room = rooms.get(roomCode);
+        if (!room) return;
+
+        if (socket.id !== room.currentPainter) return;
+
+        // 记录区域擦除操作
+        room.strokeHistory.push({ type: 'area-erase', rect, timestamp });
+        if (room.strokeHistory.length > 2000) {
+            room.strokeHistory.shift();
+        }
+
+        // 转发给竞猜者
+        socket.to(roomCode).emit('areaErase', { rect, timestamp });
     });
 
     // 绘画者选择绘画目标词

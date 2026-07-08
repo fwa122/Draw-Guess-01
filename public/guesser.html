@@ -1171,6 +1171,9 @@
         let roomName = '';
         let playerName = '';
         let playerAvatar = '';
+        // 矢量笔迹同步状态
+        let receivedStrokes = []; // 已接收的笔迹历史
+        let lastSnapshotTime = 0; // 最新快照时间戳
         const timerEl = document.getElementById('timer');
         const roundBadge = document.getElementById('roundBadge');
         const painterInfo = document.getElementById('painterInfo');
@@ -1414,9 +1417,41 @@
                     updateTimerUI(remainingTime);
                 });
 
-                // 监听画布更新
+                // 监听画布更新（兼容旧方式）
                 socketClient.on('canvasUpdate', ({ data }) => {
                     updateCanvas(data);
+                });
+
+                // ===== 矢量笔迹同步事件监听 =====
+
+                // 监听完整笔迹
+                socketClient.on('stroke', (stroke) => {
+                    drawStroke(stroke);
+                });
+
+                // 监听笔迹增量（实时绘制）
+                socketClient.on('strokeIncrement', (data) => {
+                    drawStrokeIncrement(data);
+                });
+
+                // 监听批量笔迹（中途加入）
+                socketClient.on('strokeBatch', (strokes) => {
+                    drawStrokeBatch(strokes);
+                });
+
+                // 监听画布快照
+                socketClient.on('canvasSnapshot', (data) => {
+                    handleCanvasSnapshot(data);
+                });
+
+                // 监听清空画布
+                socketClient.on('clearCanvas', ({ timestamp }) => {
+                    clearCanvas();
+                });
+
+                // 监听区域擦除
+                socketClient.on('areaErase', ({ rect, timestamp }) => {
+                    drawAreaErase(rect);
                 });
 
                 // 监听猜词正确：服务端不再广播答案，只展示排名和加分
@@ -1489,10 +1524,13 @@
                     updatePlayersUI(currentPlayers);
                     updateLeaderboardUI(currentPlayers);
                     onlineCount.textContent = `${room.players.length} 人在线`;
-                    
+
                     if (room.status === 'playing') {
                         roundBadge.textContent = `第 ${room.currentRound} / ${room.maxRounds || 5} 回合`;
                         updatePainterInfo(currentPainterId);
+
+                        // 请求画布同步（中途加入）
+                        socketClient.requestCanvasSync(roomCode);
                     }
                 }
 
@@ -1630,6 +1668,99 @@
                 ctx.drawImage(img, 0, 0);
             };
             img.src = imageData;
+        }
+
+        // ===== 矢量笔迹绘制函数 =====
+
+        // 绘制单条笔迹
+        function drawStroke(stroke) {
+            if (!stroke || stroke.type !== 'stroke') return;
+
+            ctx.beginPath();
+            ctx.strokeStyle = stroke.color;
+            ctx.lineWidth = stroke.width;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            const points = stroke.points;
+            if (!points || points.length === 0) return;
+
+            points.forEach((p, i) => {
+                if (i === 0) {
+                    ctx.moveTo(p[0], p[1]);
+                } else {
+                    ctx.lineTo(p[0], p[1]);
+                }
+            });
+            ctx.stroke();
+
+            // 存储笔迹
+            receivedStrokes.push(stroke);
+        }
+
+        // 绘制增量点（实时同步）
+        function drawStrokeIncrement({ strokeId, points, tool, color, width }) {
+            if (!points || points.length === 0) return;
+
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = width;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            points.forEach((p, i) => {
+                if (i === 0) {
+                    ctx.moveTo(p[0], p[1]);
+                } else {
+                    ctx.lineTo(p[0], p[1]);
+                }
+            });
+            ctx.stroke();
+        }
+
+        // 批量绘制笔迹（中途加入）
+        function drawStrokeBatch(strokes) {
+            if (!strokes || strokes.length === 0) return;
+
+            strokes.forEach(stroke => {
+                if (stroke.type === 'stroke') {
+                    drawStroke(stroke);
+                } else if (stroke.type === 'area-erase') {
+                    drawAreaErase(stroke.rect);
+                } else if (stroke.type === 'clear') {
+                    clearCanvas();
+                }
+            });
+        }
+
+        // 处理画布快照
+        function handleCanvasSnapshot({ data, timestamp }) {
+            const img = new Image();
+            img.onload = () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0);
+
+                // 更新快照时间
+                lastSnapshotTime = timestamp;
+
+                // 清除快照之前的笔迹缓存
+                receivedStrokes = receivedStrokes.filter(s => s.timestamp > timestamp);
+            };
+            img.src = data;
+        }
+
+        // 清空画布
+        function clearCanvas() {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            receivedStrokes = [];
+        }
+
+        // 区域擦除
+        function drawAreaErase(rect) {
+            if (!rect) return;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
         }
 
         // 显示猜词正确结果

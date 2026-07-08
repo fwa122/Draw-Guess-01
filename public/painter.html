@@ -1653,14 +1653,23 @@
         let eraserSize = 20; // 橡皮擦独立大小
         let lastX = 0;
         let lastY = 0;
-        
+
         // 区域选择状态
         let isAreaSelecting = false;
         let areaStartX = 0;
         let areaStartY = 0;
         let areaEndX = 0;
         let areaEndY = 0;
-        
+
+        // 矢量笔迹同步状态
+        let currentStroke = null; // 当前正在绘制的笔迹对象
+        let strokePoints = []; // 当前笔迹的点集合
+        let lastStrokeSendTime = 0; // 上次发送增量时间
+        let strokeIdCounter = 0; // 笔迹 ID 计数器
+        let operationStack = []; // 操作栈（用于撤销/重做）
+        let redoStack = []; // 重做栈
+        const STROKE_SEND_INTERVAL = 50; // 发送增量的间隔（毫秒）
+
         // 历史记录
         let history = [];
         let historyStep = -1;
@@ -1682,10 +1691,10 @@
             updateUndoRedoButtons();
         }
 
-        // 更新撤销/重做按钮状态
+        // 更新撤销/重做按钮状态（基于操作栈）
         function updateUndoRedoButtons() {
-            document.getElementById('btnUndo').disabled = historyStep <= 0;
-            document.getElementById('btnRedo').disabled = redoHistory.length === 0;
+            document.getElementById('btnUndo').disabled = operationStack.length === 0;
+            document.getElementById('btnRedo').disabled = redoStack.length === 0;
         }
 
         // 初始化画布
@@ -1949,23 +1958,43 @@
             const rect = canvas.getBoundingClientRect();
             lastX = e.clientX - rect.left;
             lastY = e.clientY - rect.top;
-            
+
             // 区域擦除功能
             if (currentTool === 'area-eraser') {
                 isAreaSelecting = true;
                 areaStartX = lastX;
                 areaStartY = lastY;
+                return;
             }
+
+            // 初始化矢量笔迹对象
+            strokeIdCounter++;
+            const strokeId = `stroke_${Date.now()}_${strokeIdCounter}`;
+            const tool = currentTool === 'eraser' ? 'eraser' : 'brush';
+            const color = currentTool === 'eraser' ? '#ffffff' : currentColor;
+            const width = currentTool === 'eraser' ? eraserSize : currentSize;
+
+            currentStroke = {
+                id: strokeId,
+                type: 'stroke',
+                tool: tool,
+                color: color,
+                width: width,
+                points: [[lastX, lastY]],
+                timestamp: Date.now()
+            };
+            strokePoints = [[lastX, lastY]];
+            lastStrokeSendTime = Date.now();
         }
 
         function draw(e) {
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
-            
+
             // 更新坐标显示
             document.getElementById('coords').textContent = `${Math.round(x)}, ${Math.round(y)}`;
-            
+
             // 区域选择擦除
             if (currentTool === 'area-eraser' && isAreaSelecting) {
                 areaEndX = x;
@@ -1973,13 +2002,14 @@
                 drawAreaSelection();
                 return;
             }
-            
+
             if (!isDrawing) return;
 
+            // 本地绘制（保持原有逻辑）
             ctx.beginPath();
             ctx.moveTo(lastX, lastY);
             ctx.lineTo(x, y);
-            
+
             if (currentTool === 'eraser') {
                 ctx.strokeStyle = '#ffffff';
                 ctx.lineWidth = eraserSize;
@@ -1987,10 +2017,30 @@
                 ctx.strokeStyle = currentColor;
                 ctx.lineWidth = currentSize;
             }
-            
+
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
             ctx.stroke();
+
+            // 收集笔迹点
+            strokePoints.push([x, y]);
+            if (currentStroke) {
+                currentStroke.points = strokePoints;
+            }
+
+            // 每 50ms 发送增量点（实时同步）
+            const now = Date.now();
+            if (now - lastStrokeSendTime >= STROKE_SEND_INTERVAL && currentStroke) {
+                const recentPoints = strokePoints.slice(-10); // 发送最近的 10 个点
+                socketClient.sendStrokeIncrement(
+                    currentStroke.id,
+                    recentPoints,
+                    currentStroke.tool,
+                    currentStroke.color,
+                    currentStroke.width
+                );
+                lastStrokeSendTime = now;
+            }
 
             lastX = x;
             lastY = y;
@@ -2036,17 +2086,17 @@
         function stopDrawing() {
             if (isDrawing) {
                 isDrawing = false;
-                
+
                 // 执行区域擦除
                 if (currentTool === 'area-eraser' && isAreaSelecting) {
                     isAreaSelecting = false;
-                    
+
                     // 计算区域边界
                     const minX = Math.min(areaStartX, areaEndX);
                     const minY = Math.min(areaStartY, areaEndY);
                     const width = Math.abs(areaEndX - areaStartX);
                     const height = Math.abs(areaEndY - areaStartY);
-                    
+
                     if (width > 5 && height > 5) { // 最小选择区域
                         // 恢复之前的内容
                         const img = new Image();
@@ -2054,12 +2104,15 @@
                         img.onload = () => {
                             ctx.clearRect(0, 0, canvas.width, canvas.height);
                             ctx.drawImage(img, 0, 0);
-                            
+
                             // 擦除选定区域
                             ctx.fillStyle = '#ffffff';
                             ctx.fillRect(minX, minY, width, height);
-                            
+
                             saveHistory();
+
+                            // 发送区域擦除事件
+                            socketClient.sendAreaErase({ x: minX, y: minY, width, height }, Date.now());
                         };
                     } else {
                         // 选择区域太小，恢复画布
@@ -2070,9 +2123,20 @@
                             ctx.drawImage(img, 0, 0);
                         };
                     }
-                } else {
-                    saveHistory();
+                    return;
                 }
+
+                // 发送完整笔迹（笔画结束）
+                if (currentStroke && strokePoints.length > 0) {
+                    socketClient.sendStroke(currentStroke);
+                    // 加入操作栈（用于后续撤销/重做改造）
+                    operationStack.push(currentStroke);
+                    redoStack = [];
+                }
+
+                saveHistory();
+                currentStroke = null;
+                strokePoints = [];
             }
         }
 
@@ -2090,33 +2154,68 @@
             document.getElementById('coords').textContent = `${Math.round(x)}, ${Math.round(y)}`;
         });
 
-        // 撤销
+        // ===== 操作栈撤销/重做函数 =====
+
+        // 从操作栈重绘整个画布
+        function redrawFromOperations() {
+            // 清空画布
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 按顺序执行所有操作
+            operationStack.forEach(op => {
+                if (op.type === 'stroke') {
+                    ctx.beginPath();
+                    ctx.strokeStyle = op.color;
+                    ctx.lineWidth = op.width;
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+
+                    op.points.forEach((p, i) => {
+                        if (i === 0) ctx.moveTo(p[0], p[1]);
+                        else ctx.lineTo(p[0], p[1]);
+                    });
+                    ctx.stroke();
+                } else if (op.type === 'area-erase') {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(op.rect.x, op.rect.y, op.rect.width, op.rect.height);
+                } else if (op.type === 'clear') {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
+            });
+        }
+
+        // 撤销（使用操作栈）
         document.getElementById('btnUndo').addEventListener('click', () => {
-            if (historyStep > 0) {
-                redoHistory.push(history[historyStep]);
-                historyStep--;
-                const img = new Image();
-                img.src = history[historyStep];
-                img.onload = () => {
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    ctx.drawImage(img, 0, 0);
-                };
+            if (operationStack.length > 0) {
+                // 取出最后一个操作放入重做栈
+                const lastOp = operationStack.pop();
+                redoStack.push(lastOp);
+
+                // 重绘画布
+                redrawFromOperations();
+
+                // 保存到图片历史（备用）
+                saveHistory();
+
                 updateUndoRedoButtons();
             }
         });
 
-        // 重做
+        // 重做（使用操作栈）
         document.getElementById('btnRedo').addEventListener('click', () => {
-            if (redoHistory.length > 0) {
-                const redoState = redoHistory.pop();
-                history.push(redoState);
-                historyStep++;
-                const img = new Image();
-                img.src = redoState;
-                img.onload = () => {
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    ctx.drawImage(img, 0, 0);
-                };
+            if (redoStack.length > 0) {
+                // 取出重做栈中的操作放入操作栈
+                const op = redoStack.pop();
+                operationStack.push(op);
+
+                // 重绘画布
+                redrawFromOperations();
+
+                // 保存到图片历史（备用）
+                saveHistory();
+
                 updateUndoRedoButtons();
             }
         });
@@ -2127,6 +2226,11 @@
                 ctx.fillStyle = '#ffffff';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 saveHistory();
+                // 发送清空画布事件
+                socketClient.sendClearCanvas(Date.now());
+                // 清空操作栈
+                operationStack = [];
+                redoStack = [];
             }
         });
 
@@ -2438,6 +2542,9 @@
             if (socketClient && socketClient.roomCode && wordToSend) {
                 socketClient.selectWord(wordToSend);
             }
+
+            // 启动快照同步（用于中途加入同步）
+            startSnapshotSync();
         });
 
         // 刷新候选词汇
@@ -2639,12 +2746,16 @@
                 // 监听回合结束
                 socketClient.on('roundEnded', ({ message, word }) => {
                     updatePainterTimer(0);
+                    // 停止快照同步
+                    stopSnapshotSync();
                     alert(`${message || '本轮结束！'} ${word || ''}`);
                 });
 
                 // 监听游戏结束
                 socketClient.on('gameEnded', ({ room, rankings }) => {
                     hasGameEnded = true;
+                    // 停止快照同步
+                    stopSnapshotSync();
                     showGameEndRankings(rankings || (room && room.players));
                 });
 
@@ -2765,13 +2876,20 @@
 
         document.getElementById('btnBackToRoom').addEventListener('click', backToRoom);
 
-        // 发送画布数据
+        // 发送画布数据（兼容旧方式，现在主要使用矢量笔迹同步）
         function sendCanvasData() {
             const imageData = canvas.toDataURL('image/png', 0.5);
             socketClient.sendCanvasUpdate(imageData, roomCode);
         }
 
-        // 定时发送画布数据（降低频率）
+        // 发送画布快照（用于中途加入同步）
+        function sendCanvasSnapshot() {
+            const imageData = canvas.toDataURL('image/png', 0.5);
+            const timestamp = Date.now();
+            socketClient.sendCanvasSnapshot(imageData, timestamp, roomCode);
+        }
+
+        // 定时发送画布数据（降低频率，兼容旧方式）
         let canvasSendInterval = null;
         function startCanvasSync() {
             if (canvasSendInterval) return;
@@ -2787,7 +2905,27 @@
             }
         }
 
-        // 监听绘制事件，触发同步
+        // 定时发送快照（用于中途加入同步）
+        let snapshotInterval = null;
+        const SNAPSHOT_INTERVAL = 5000; // 每 5 秒发送一次快照
+
+        function startSnapshotSync() {
+            if (snapshotInterval) return;
+            // 立即发送一次快照
+            sendCanvasSnapshot();
+            snapshotInterval = setInterval(() => {
+                sendCanvasSnapshot();
+            }, SNAPSHOT_INTERVAL);
+        }
+
+        function stopSnapshotSync() {
+            if (snapshotInterval) {
+                clearInterval(snapshotInterval);
+                snapshotInterval = null;
+            }
+        }
+
+        // 监听绘制事件，触发同步（兼容旧方式）
         canvas.addEventListener('mouseup', sendCanvasData);
         canvas.addEventListener('mouseleave', sendCanvasData);
 
