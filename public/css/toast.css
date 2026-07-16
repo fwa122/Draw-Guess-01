@@ -1,0 +1,309 @@
+/**
+ * Toast 提示组件样式
+ * 毛玻璃效果 + 圆角 + 动画
+ */
+
+/* ===== Toast 容器 ===== */
+.toast-container {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    pointer-events: none;
+    max-width: 400px;
+    width: calc(100% - 40px);
+}
+
+/* ===== Toast 项目 ===== */
+.toast-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    pointer-events: auto;
+    position: relative;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.toast-show {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+.toast-hide {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+}
+
+/* ===== Toast 图标 ===== */
+.toast-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+/* ===== Toast 内容 ===== */
+.toast-content {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 500;
+    color: #1e293b;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+/* ===== Toast 关闭按钮 ===== */
+.toast-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #94a3b8;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.toast-close:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: #64748b;
+}
+
+/* ===== Toast 进度条 ===== */
+.toast-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 0 0 12px 12px;
+    animation: toastProgress linear forwards;
+}
+
+@keyframes toastProgress {
+    from { width: 100%; }
+    to { width: 0%; }
+}
+
+/* ===== Toast 类型样式 ===== */
+
+/* 成功 */
+.toast-success {
+    border-left: 4px solid #10b981;
+}
+
+.toast-success .toast-icon {
+    background: rgba(16, 185, 129, 0.15);
+    color: #059669;
+}
+
+.toast-success .toast-progress {
+    background: #10b981;
+}
+
+/* 错误 */
+.toast-error {
+    border-left: 4px solid #ef4444;
+}
+
+.toast-error .toast-icon {
+    background: rgba(239, 68, 68, 0.15);
+    color: #dc2626;
+}
+
+.toast-error .toast-progress {
+    background: #ef4444;
+}
+
+/* 警告 */
+.toast-warning {
+    border-left: 4px solid #f59e0b;
+}
+
+.toast-warning .toast-icon {
+    background: rgba(245, 158, 11, 0.15);
+    color: #d97706;
+}
+
+.toast-warning .toast-progress {
+    background: #f59e0b;
+}
+
+/* 信息 */
+.toast-info {
+    border-left: 4px solid #3b82f6;
+}
+
+.toast-info .toast-icon {
+    background: rgba(59, 130, 246, 0.15);
+    color: #2563eb;
+}
+
+.toast-info .toast-progress {
+    background: #3b82f6;
+}
+
+/* ===== 确认弹窗遮罩 ===== */
+.confirm-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.confirm-show {
+    opacity: 1;
+}
+
+/* ===== 确认弹窗 ===== */
+.confirm-popup {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-radius: 20px;
+    padding: 28px 32px;
+    min-width: 320px;
+    max-width: 420px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+    text-align: center;
+    transform: scale(0.9);
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.confirm-show .confirm-popup {
+    transform: scale(1);
+    opacity: 1;
+}
+
+/* ===== 确认弹窗图标 ===== */
+.confirm-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 16px;
+    border-radius: 50%;
+}
+
+.confirm-icon-success {
+    background: rgba(16, 185, 129, 0.15);
+    color: #059669;
+}
+
+.confirm-icon-error {
+    background: rgba(239, 68, 68, 0.15);
+    color: #dc2626;
+}
+
+.confirm-icon-warning {
+    background: rgba(245, 158, 11, 0.15);
+    color: #d97706;
+}
+
+.confirm-icon-info {
+    background: rgba(59, 130, 246, 0.15);
+    color: #2563eb;
+}
+
+/* ===== 确认弹窗标题 ===== */
+.confirm-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 8px;
+}
+
+/* ===== 确认弹窗消息 ===== */
+.confirm-message {
+    font-size: 14px;
+    color: #64748b;
+    line-height: 1.5;
+    margin-bottom: 24px;
+}
+
+/* ===== 确认弹窗按钮 ===== */
+.confirm-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.confirm-btn {
+    padding: 10px 24px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.confirm-btn-cancel {
+    background: rgba(0, 0, 0, 0.05);
+    color: #64748b;
+}
+
+.confirm-btn-cancel:hover {
+    background: rgba(0, 0, 0, 0.1);
+    color: #475569;
+}
+
+.confirm-btn-confirm {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+}
+
+.confirm-btn-confirm:hover {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    transform: translateY(-1px);
+}
+
+/* ===== 响应式适配 ===== */
+@media (max-width: 480px) {
+    .toast-container {
+        top: 10px;
+        width: calc(100% - 20px);
+    }
+    
+    .toast-item {
+        padding: 12px 16px;
+    }
+    
+    .confirm-popup {
+        min-width: auto;
+        width: calc(100% - 40px);
+        padding: 24px 20px;
+    }
+}

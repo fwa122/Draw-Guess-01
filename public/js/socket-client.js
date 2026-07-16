@@ -162,6 +162,19 @@ class SocketClient {
         });
     }
 
+    validateRoomPassword(roomCode, password) {
+        return new Promise((resolve, reject) => {
+            if (!this.socket) {
+                reject(new Error('未连接到服务器'));
+                return;
+            }
+
+            this.socket.emit('validateRoomPassword', { roomCode, password }, (response) => {
+                resolve(response || { success: false, message: '验证失败' });
+            });
+        });
+    }
+
     leaveRoom(roomCode = this.roomCode) {
         if (this.socket) {
             this.socket.emit('leaveRoom', { roomCode });
@@ -170,9 +183,19 @@ class SocketClient {
     }
 
     setReady(ready, roomCode = this.roomCode) {
-        if (this.socket) {
-            this.socket.emit('playerReady', { roomCode, ready });
-        }
+        return new Promise((resolve, reject) => {
+            if (!this.socket) {
+                reject(new Error('未连接到服务器'));
+                return;
+            }
+            this.socket.emit('playerReady', { roomCode, ready }, (response) => {
+                if (response && response.success) {
+                    resolve(response);
+                } else {
+                    reject(new Error(response?.message || '操作失败'));
+                }
+            });
+        });
     }
 
     startGame(roomCode = this.roomCode) {

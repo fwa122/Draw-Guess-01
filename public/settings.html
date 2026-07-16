@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>设置 - 你画我猜</title>
+    <link rel="stylesheet" href="/css/settings.css">
+</head>
+<body>
+    <div class="settings-container">
+        <!-- 头部 -->
+        <div class="settings-header">
+            <button class="back-btn" onclick="goBack()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M19 12H5"/>
+                    <path d="M12 19l-7-7 7-7"/>
+                </svg>
+            </button>
+            <h1 class="settings-title">设置</h1>
+        </div>
+
+        <!-- 用户信息卡片 -->
+        <div class="glass-card">
+            <div class="user-info">
+                <div class="avatar-wrapper">
+                    <img id="avatarImg" src="/images/default-avatar.svg" alt="头像" class="avatar-img">
+                </div>
+                <div class="user-details">
+                    <div class="user-nickname" id="nicknameDisplay">加载中...</div>
+                    <div class="user-email" id="emailDisplay">-</div>
+                </div>
+            </div>
+
+            <!-- 游客提示 -->
+            <div id="guestTip" class="guest-tip hidden">
+                <div>您正在以游客身份游戏，数据仅保存在本地。注册账号可跨设备同步数据。</div>
+                <button class="guest-tip-btn" onclick="goToRegister()">立即注册</button>
+            </div>
+        </div>
+
+        <!-- 账号设置 -->
+        <div class="glass-card">
+            <h3 class="section-title">账号设置</h3>
+            
+            <!-- 修改昵称 -->
+            <div class="form-group">
+                <label class="form-label">昵称</label>
+                <div class="input-group">
+                    <input type="text" id="nicknameInput" class="form-input" placeholder="输入新昵称" maxlength="16">
+                    <button class="btn btn-primary" onclick="updateNickname()">保存</button>
+                </div>
+            </div>
+
+            <!-- 邮箱 -->
+            <div id="emailSection" class="form-group">
+                <label class="form-label">邮箱</label>
+                <div class="info-row">
+                    <span class="info-value" id="emailText">-</span>
+                    <span id="emailVerifiedBadge" class="badge badge-success hidden">已验证</span>
+                </div>
+            </div>
+
+            <!-- 密码状态 -->
+            <div id="passwordSection" class="form-group">
+                <label class="form-label">密码</label>
+                <div class="info-row">
+                    <span class="info-value" id="passwordStatus">-</span>
+                    <button id="passwordBtn" class="btn btn-link" onclick="handlePasswordAction()">设置密码</button>
+                </div>
+            </div>
+
+            <!-- 游戏统计 -->
+            <div class="divider"></div>
+            <h4 class="form-label">游戏统计</h4>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-value" id="totalGames">0</div>
+                    <div class="stat-label">总场次</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="totalScore">0</div>
+                    <div class="stat-label">累计分数</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="bestScore">0</div>
+                    <div class="stat-label">最高分</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 退出登录 -->
+        <div id="logoutSection" class="glass-card hidden">
+            <button class="btn btn-danger btn-full" onclick="logout()">退出登录</button>
+        </div>
+
+        <!-- 游客登录/注册 -->
+        <div id="authSection" class="glass-card hidden">
+            <div class="btn-group">
+                <button class="btn btn-primary btn-full" onclick="goToLogin()">登录</button>
+                <button class="btn btn-secondary btn-full" onclick="goToRegister()">注册新账号</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 提示消息 -->
+    <div id="toast" class="toast"></div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let userInfo = null;
+
+        // 显示提示
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast toast-${type} show`;
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2500);
+        }
+
+        // 加载用户信息
+        async function loadUserInfo() {
+            const clientId = localStorage.getItem('clientId');
+            const accessToken = localStorage.getItem('accessToken');
+            const storedUser = localStorage.getItem('userInfo');
+
+            if (storedUser) {
+                userInfo = JSON.parse(storedUser);
+            }
+
+            updateUI();
+
+            if (clientId) {
+                try {
+                    const res = await fetch(`${API_BASE}/api/auth/user/${clientId}`);
+                    const data = await res.json();
+                    if (data.success && data.user) {
+                        userInfo = data.user;
+                        localStorage.setItem('userInfo', JSON.stringify(userInfo));
+                        updateUI();
+                    }
+                } catch (e) {
+                    console.error('获取用户信息失败:', e);
+                }
+            }
+        }
+
+        // 更新 UI
+        function updateUI() {
+            const guestTip = document.getElementById('guestTip');
+            const emailSection = document.getElementById('emailSection');
+            const passwordSection = document.getElementById('passwordSection');
+            const logoutSection = document.getElementById('logoutSection');
+            const authSection = document.getElementById('authSection');
+
+            if (userInfo && userInfo.email) {
+                // 已登录用户
+                guestTip.classList.add('hidden');
+                emailSection.classList.remove('hidden');
+                passwordSection.classList.remove('hidden');
+                logoutSection.classList.remove('hidden');
+                authSection.classList.add('hidden');
+
+                document.getElementById('nicknameDisplay').textContent = userInfo.nickname || '用户';
+                document.getElementById('nicknameInput').value = userInfo.nickname || '';
+                
+                if (userInfo.avatar && userInfo.avatar.startsWith('/')) {
+                    document.getElementById('avatarImg').src = userInfo.avatar;
+                } else if (userInfo.avatar) {
+                    document.getElementById('avatarImg').src = userInfo.avatar;
+                } else {
+                    document.getElementById('avatarImg').src = '/images/default-avatar.svg';
+                }
+                
+                document.getElementById('emailDisplay').textContent = userInfo.email;
+                document.getElementById('emailText').textContent = userInfo.email;
+                document.getElementById('emailVerifiedBadge').classList.remove('hidden');
+                
+                if (userInfo.hasPassword) {
+                    document.getElementById('passwordStatus').textContent = '已设置';
+                    document.getElementById('passwordBtn').textContent = '修改密码';
+                } else {
+                    document.getElementById('passwordStatus').textContent = '未设置';
+                    document.getElementById('passwordBtn').textContent = '设置密码';
+                }
+
+                document.getElementById('totalGames').textContent = userInfo.totalGames || 0;
+                document.getElementById('totalScore').textContent = userInfo.totalScore || 0;
+                document.getElementById('bestScore').textContent = userInfo.bestScore || 0;
+            } else {
+                // 游客用户
+                guestTip.classList.remove('hidden');
+                emailSection.classList.add('hidden');
+                passwordSection.classList.add('hidden');
+                logoutSection.classList.add('hidden');
+                authSection.classList.remove('hidden');
+
+                document.getElementById('nicknameDisplay').textContent = userInfo?.nickname || '游客';
+                document.getElementById('nicknameInput').value = userInfo?.nickname || '';
+                document.getElementById('avatarImg').src = '/images/default-avatar.svg';
+                document.getElementById('emailDisplay').textContent = '游客模式';
+
+                document.getElementById('totalGames').textContent = userInfo?.totalGames || 0;
+                document.getElementById('totalScore').textContent = userInfo?.totalScore || 0;
+                document.getElementById('bestScore').textContent = userInfo?.bestScore || 0;
+            }
+        }
+
+        // 修改昵称
+        async function updateNickname() {
+            const nickname = document.getElementById('nicknameInput').value.trim();
+            if (!nickname) {
+                showToast('请输入昵称', 'error');
+                return;
+            }
+
+            const accessToken = localStorage.getItem('accessToken');
+            if (!accessToken) {
+                userInfo = userInfo || {};
+                userInfo.nickname = nickname;
+                localStorage.setItem('userInfo', JSON.stringify(userInfo));
+                document.getElementById('nicknameDisplay').textContent = nickname;
+                showToast('昵称已更新', 'success');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/api/auth/update-profile`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({ nickname })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    userInfo.nickname = nickname;
+                    localStorage.setItem('userInfo', JSON.stringify(userInfo));
+                    document.getElementById('nicknameDisplay').textContent = nickname;
+                    showToast('昵称已更新', 'success');
+                } else {
+                    showToast(data.error || '更新失败', 'error');
+                }
+            } catch (e) {
+                showToast('网络错误', 'error');
+            }
+        }
+
+        // 密码操作
+        function handlePasswordAction() {
+            if (userInfo && userInfo.hasPassword) {
+                window.location.href = '/reset-password.html';
+            } else {
+                window.location.href = '/set-password.html';
+            }
+        }
+
+        // 退出登录
+        async function logout() {
+            const accessToken = localStorage.getItem('accessToken');
+            
+            if (accessToken) {
+                try {
+                    await fetch(`${API_BASE}/api/auth/logout`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`
+                        }
+                    });
+                } catch (e) {}
+            }
+
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            localStorage.removeItem('userInfo');
+            localStorage.removeItem('clientId');
+
+            showToast('已退出登录', 'success');
+            setTimeout(() => {
+                window.location.href = '/lobby.html';
+            }, 1000);
+        }
+
+        // 页面跳转
+        function goBack() {
+            window.location.href = '/lobby.html';
+        }
+
+        function goToLogin() {
+            window.location.href = '/login.html';
+        }
+
+        function goToRegister() {
+            window.location.href = '/register.html';
+        }
+
+        // 初始化
+        loadUserInfo();
+    </script>
+</body>
+</html>

@@ -1,0 +1,432 @@
+/**
+ * Socket 客户端封装（uni-app x 版）
+ * 使用 uni-app x 的全局 WebSocket API
+ */
+
+export type SocketStatus = {
+	isConnected: boolean,
+	playerId: string | null
+}
+
+export type ConnectResult = {
+	success: boolean,
+	playerId?: string,
+	message?: string
+}
+
+// 全局事件回调表
+const eventCallbacks: Map<string, ((data: any) => void)[]> = new Map()
+
+export class SocketClient {
+	private isConnected: boolean = false
+	private reconnectAttempts: number = 0
+	private maxReconnectAttempts: number = 5
+	private heartbeatTimer: number = 0
+	private lastUrl: string = ''
+	private listenersRegistered: boolean = false  // 防止重复注册监听器
+	private connectionCheckTimer: number = 0  // 连接检查定时器
+	
+	// 本地存储的客户端 ID（用于断线重连）
+	private clientId: string = ''
+	
+	constructor() {
+		this.clientId = this.getOrCreateClientId()
+	}
+	
+	/**
+	 * 获取或创建客户端唯一标识
+	 */
+	private getOrCreateClientId(): string {
+		let id: string = ''
+		try {
+			const stored = uni.getStorageSync('draw_guess_client_id')
+			if (stored != null) {
+				id = stored as string
+			}
+		} catch (e) {
+			console.log('[SocketClient] 无法读取存储')
+		}
+		
+		if (id.length == 0) {
+			id = 'c_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 9)
+			try {
+				uni.setStorageSync('draw_guess_client_id', id)
+			} catch (e) {
+				console.log('[SocketClient] 无法写入存储')
+			}
+		}
+		
+		return id
+	}
+	
+	/**
+	 * 注册全局 WebSocket 监听器（只注册一次）
+	 */
+	private registerGlobalListeners(): void {
+		if (this.listenersRegistered) {
+			console.log('[SocketClient] 监听器已注册，跳过')
+			return
+		}
+		
+		console.log('[SocketClient] 注册全局监听器')
+		
+		// 监听 WebSocket 打开
+		uni.onSocketOpen((res) => {
+			console.log('[SocketClient] onSocketOpen 触发')
+			console.log('[SocketClient] WebSocket 已连接，准备启动心跳')
+			this.isConnected = true
+			this.reconnectAttempts = 0
+			this.startHeartbeat()
+			this.triggerEvent('connected', { success: true })
+		})
+		
+		// 监听 WebSocket 消息
+		uni.onSocketMessage((res) => {
+			console.log('[SocketClient] onSocketMessage 触发')
+			const data = res.data
+			if (data != null) {
+				this.handleMessage(data as string)
+			}
+		})
+		
+		// 监听 WebSocket 关闭
+		uni.onSocketClose((res) => {
+			console.log('[SocketClient] onSocketClose 触发')
+			console.log('[SocketClient] 关闭代码:', res.code, '原因:', res.reason)
+			this.handleDisconnect()
+		})
+		
+		// 监听 WebSocket 错误
+		uni.onSocketError((err) => {
+			console.log('[SocketClient] onSocketError 触发')
+			console.error('[SocketClient] WebSocket 错误详情:', JSON.stringify(err))
+			this.triggerEvent('error', err)
+		})
+		
+		this.listenersRegistered = true
+		console.log('[SocketClient] 全局监听器注册完成')
+	}
+	
+	/**
+	 * 连接到服务器
+	 * @param url 服务器地址，如 http://192.168.1.100:3000
+	 */
+	connect(url: string): Promise<ConnectResult> {
+		return new Promise((resolve, reject) => {
+			console.log('[SocketClient] ========== 开始连接 ==========')
+			console.log('[SocketClient] 输入地址:', url)
+			
+			// 将 http/https 转换为 ws/wss
+			let wsUrl: string = url
+			if (url.startsWith('http://')) {
+				wsUrl = url.replace('http://', 'ws://')
+			} else if (url.startsWith('https://')) {
+				wsUrl = url.replace('https://', 'wss://')
+			}
+			
+			// 使用独立的 WebSocket 路径（不使用 Socket.io 路径）
+			wsUrl += '/ws'
+			
+			console.log('[SocketClient] WebSocket 地址:', wsUrl)
+			this.lastUrl = wsUrl
+			
+			// 先注册全局监听器
+			this.registerGlobalListeners()
+			
+			// 连接成功标志
+			let connectionResolved: boolean = false
+			
+			// 设置超时
+			const timeoutTimer: number = setTimeout(() => {
+				if (!connectionResolved) {
+					console.error('[SocketClient] 连接超时（10秒）')
+					connectionResolved = true
+					// 清理检查定时器
+					if (this.connectionCheckTimer != 0) {
+						clearInterval(this.connectionCheckTimer)
+						this.connectionCheckTimer = 0
+					}
+					reject(new Error('连接超时'))
+				}
+			}, 10000)
+			
+			// 发起连接
+			console.log('[SocketClient] 调用 uni.connectSocket...')
+			
+			uni.connectSocket({
+				url: wsUrl,
+				success: () => {
+					console.log('[SocketClient] connectSocket success 回调')
+					console.log('[SocketClient] WebSocket 正在连接...')
+					
+					// 等待 onSocketOpen 回调
+					// 设置一个检查定时器，等待连接成功
+					this.connectionCheckTimer = setInterval(() => {
+						if (this.isConnected && !connectionResolved) {
+							clearInterval(this.connectionCheckTimer)
+							this.connectionCheckTimer = 0
+							clearTimeout(timeoutTimer)
+							connectionResolved = true
+							console.log('[SocketClient] 连接成功，返回结果')
+							resolve({
+								success: true,
+								playerId: 'ws_' + Date.now().toString(36)
+							})
+						}
+					}, 100) as number
+				},
+				fail: (err) => {
+					console.error('[SocketClient] connectSocket fail 回调')
+					console.error('[SocketClient] 错误详情:', JSON.stringify(err))
+					console.error('[SocketClient] 错误码:', err.errCode)
+					console.error('[SocketClient] 错误信息:', err.errMsg)
+					
+					clearTimeout(timeoutTimer)
+					// 清理检查定时器
+					if (this.connectionCheckTimer != 0) {
+						clearInterval(this.connectionCheckTimer)
+						this.connectionCheckTimer = 0
+					}
+					if (!connectionResolved) {
+						connectionResolved = true
+						const errorMsg: string = err.errMsg != null ? err.errMsg : '未知错误'
+						reject(new Error('连接失败: ' + errorMsg))
+					}
+				},
+				complete: () => {
+					console.log('[SocketClient] connectSocket complete 回调')
+				}
+			})
+		})
+	}
+	
+	/**
+	 * 处理接收的消息
+	 * Socket.io 协议格式: 42["event",{"data":"..."}]
+	 */
+	private handleMessage(message: string): void {
+		console.log('[SocketClient] 收到消息，长度:', message.length)
+		console.log('[SocketClient] 消息预览:', message.length > 100 ? message.substring(0, 100) + '...' : message)
+		
+		// 触发原始消息事件（用于调试）
+		this.triggerEvent('_rawMessage', { message: message })
+		
+		// 处理心跳
+		if (message == '2') {
+			console.log('[SocketClient] 收到 Ping，发送 Pong')
+			this.sendRaw('3') // pong
+			return
+		}
+		
+		// 处理心跳响应
+		if (message == '3') {
+			console.log('[SocketClient] 收到 Pong')
+			return
+		}
+		
+		// 处理 Socket.io 协议消息
+		if (message.startsWith('42')) {
+			try {
+				const jsonStr: string = message.substring(2)
+				console.log('[SocketClient] 解析 JSON:', jsonStr.length > 200 ? jsonStr.substring(0, 200) + '...' : jsonStr)
+				
+				const parsed: UTSJSONObject = JSON.parse(jsonStr) as UTSJSONObject
+				
+				// 解析事件和数据
+				const parsedArray: any[] = parsed as any[]
+				if (parsedArray.length >= 2) {
+					const event: string = parsedArray[0] as string
+					const data: any = parsedArray[1]
+					
+					console.log('[SocketClient] 解析事件:', event)
+					this.triggerEvent(event, data)
+				}
+			} catch (error) {
+				console.error('[SocketClient] 消息解析失败:', error)
+			}
+		} else {
+			console.log('[SocketClient] 未知消息格式:', message.substring(0, 50))
+		}
+	}
+	
+	/**
+	 * 发送消息（Socket.io 协议格式）
+	 */
+	emit(event: string, data: any): void {
+		if (!this.isConnected) {
+			console.warn('[SocketClient] 未连接，无法发送事件:', event)
+			return
+		}
+		
+		// 编码为 Socket.io 协议格式
+		const messageArray: any[] = [event, data]
+		const message: string = '42' + JSON.stringify(messageArray)
+		console.log('[SocketClient] 发送事件:', event, '消息长度:', message.length)
+		this.sendRaw(message)
+	}
+	
+	/**
+	 * 发送原始数据
+	 */
+	private sendRaw(data: string): void {
+		console.log('[SocketClient] 发送数据，长度:', data.length)
+		
+		uni.sendSocketMessage({
+			data: data,
+			success: () => {
+				console.log('[SocketClient] 发送成功')
+			},
+			fail: (err) => {
+				console.error('[SocketClient] 发送失败:', JSON.stringify(err))
+			}
+		})
+	}
+	
+	/**
+	 * 开始心跳检测
+	 */
+	private startHeartbeat(): void {
+		this.stopHeartbeat()
+		
+		console.log('[SocketClient] 启动心跳检测（25秒间隔）')
+		
+		this.heartbeatTimer = setInterval(() => {
+			if (this.isConnected) {
+				console.log('[SocketClient] 发送心跳 Ping')
+				this.sendRaw('2') // ping
+			}
+		}, 25000) as number
+	}
+	
+	/**
+	 * 停止心跳检测
+	 */
+	private stopHeartbeat(): void {
+		const timer: number = this.heartbeatTimer
+		if (timer != 0) {
+			clearInterval(timer)
+			this.heartbeatTimer = 0
+			console.log('[SocketClient] 心跳检测已停止')
+		}
+	}
+	
+	/**
+	 * 处理断线
+	 */
+	private handleDisconnect(): void {
+		console.log('[SocketClient] ========== 连接断开 ==========')
+		this.isConnected = false
+		this.stopHeartbeat()
+		
+		this.triggerEvent('disconnected', {})
+		
+		// 自动重连（指数退避）
+		if (this.reconnectAttempts < this.maxReconnectAttempts) {
+			const delay: number = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000)
+			console.log('[SocketClient] ' + delay + 'ms 后尝试重连...（第' + (this.reconnectAttempts + 1) + '次）')
+			
+			setTimeout(() => {
+				this.reconnectAttempts++
+				console.log('[SocketClient] 开始重连...')
+				this.connect(this.lastUrl).then(
+					() => {
+						console.log('[SocketClient] 重连成功')
+					},
+					(error: Error) => {
+						console.error('[SocketClient] 重连失败:', error.message)
+					}
+				)
+			}, delay)
+		} else {
+			console.log('[SocketClient] 已达最大重连次数，停止重连')
+		}
+	}
+	
+	/**
+	 * 监听事件
+	 */
+	on(event: string, callback: (data: any) => void): void {
+		console.log('[SocketClient] 注册事件监听:', event)
+		if (!eventCallbacks.has(event)) {
+			eventCallbacks.set(event, [])
+		}
+		const handlers = eventCallbacks.get(event)
+		if (handlers != null) {
+			handlers.push(callback)
+		}
+	}
+	
+	/**
+	 * 移除事件监听
+	 */
+	off(event: string, callback?: ((data: any) => void)): void {
+		console.log('[SocketClient] 移除事件监听:', event)
+		if (!eventCallbacks.has(event)) return
+		
+		if (callback != null) {
+			const handlers = eventCallbacks.get(event)
+			if (handlers != null) {
+				const index: number = handlers.indexOf(callback)
+				if (index > -1) {
+					handlers.splice(index, 1)
+				}
+			}
+		} else {
+			eventCallbacks.delete(event)
+		}
+	}
+	
+	/**
+	 * 触发事件
+	 */
+	private triggerEvent(event: string, data: any): void {
+		const callbacks = eventCallbacks.get(event)
+		if (callbacks != null && callbacks.length > 0) {
+			console.log('[SocketClient] 触发事件:', event, '监听器数量:', callbacks.length)
+			let i = 0
+			while (i < callbacks.length) {
+				try {
+					callbacks[i](data)
+				} catch (error) {
+					console.error('[SocketClient] 事件处理错误 ' + event + ':', error)
+				}
+				i++
+			}
+		}
+	}
+	
+	/**
+	 * 断开连接
+	 */
+	disconnect(): void {
+		console.log('[SocketClient] 主动断开连接')
+		this.stopHeartbeat()
+		this.reconnectAttempts = this.maxReconnectAttempts // 阻止自动重连
+		
+		uni.closeSocket({
+			code: 1000,
+			reason: 'Client disconnect',
+			success: () => {
+				console.log('[SocketClient] closeSocket 成功')
+			},
+			fail: (err) => {
+				console.error('[SocketClient] closeSocket 失败:', JSON.stringify(err))
+			}
+		})
+		
+		this.isConnected = false
+	}
+	
+	/**
+	 * 获取连接状态
+	 */
+	getStatus(): SocketStatus {
+		return {
+			isConnected: this.isConnected,
+			playerId: this.isConnected ? 'connected' : null
+		}
+	}
+}
+
+// 导出单例
+export const socketClient = new SocketClient()

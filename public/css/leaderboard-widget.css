@@ -1,0 +1,230 @@
+/* ===== 动态排行榜浮动图标 ===== */
+
+/* 容器 - 可拖拽 */
+.leaderboard-widget {
+    position: fixed !important;
+    z-index: 99998 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    user-select: none;
+    touch-action: none;
+    transition: opacity 0.3s ease;
+}
+
+.leaderboard-widget.dragging {
+    opacity: 0.8;
+}
+
+/* 按钮容器 - 3D透视 */
+.leaderboard-btn-wrapper {
+    position: relative;
+    width: 70px;
+    height: 70px;
+    perspective: 1000px;
+}
+
+/* 主按钮 - 3D新拟态 */
+.leaderboard-icon-btn {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(135deg, #e8eef5, #dde4ed);
+    cursor: pointer;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow:
+        9px 9px 16px rgba(163, 177, 198, 0.6),
+        -9px -9px 16px rgba(255, 255, 255, 0.8),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    outline: none;
+    padding: 0;
+    margin: 0;
+}
+
+.leaderboard-icon-btn:hover {
+    transform: scale(1.08) translateY(-8px);
+    box-shadow:
+        12px 12px 20px rgba(163, 177, 198, 0.7),
+        -12px -12px 20px rgba(255, 255, 255, 0.9),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+}
+
+.leaderboard-icon-btn:active {
+    transform: scale(0.95) translateY(2px);
+    box-shadow:
+        inset 4px 4px 8px rgba(163, 177, 198, 0.6),
+        inset -4px -4px 8px rgba(255, 255, 255, 0.5);
+}
+
+/* 内部渐变面 */
+.leaderboard-btn-face {
+    position: absolute;
+    inset: 5px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow:
+        inset 2px 2px 5px rgba(255, 255, 255, 0.4),
+        0 8px 20px rgba(251, 191, 36, 0.5);
+    transition: all 0.3s ease;
+}
+
+.leaderboard-icon-btn:hover .leaderboard-btn-face {
+    background: linear-gradient(135deg, #fcd34d, #fbbf24);
+    box-shadow:
+        inset 2px 2px 5px rgba(255, 255, 255, 0.5),
+        0 10px 25px rgba(251, 191, 36, 0.6);
+}
+
+/* 图标 */
+.leaderboard-icon-btn svg {
+    width: 36px;
+    height: 36px;
+    color: white;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+    z-index: 2;
+}
+
+/* 动态光芒容器 */
+.leaderboard-glow {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.leaderboard-icon-btn:hover .leaderboard-glow {
+    opacity: 1;
+}
+
+/* 光芒射线 */
+.glow-ray {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(251, 191, 36, 0.8), transparent);
+    transform-origin: left center;
+    animation: rayRotate 3s linear infinite;
+}
+
+.glow-ray:nth-child(1) { animation-delay: 0s; }
+.glow-ray:nth-child(2) { animation-delay: 0.5s; transform: rotate(60deg); }
+.glow-ray:nth-child(3) { animation-delay: 1s; transform: rotate(120deg); }
+.glow-ray:nth-child(4) { animation-delay: 1.5s; transform: rotate(180deg); }
+.glow-ray:nth-child(5) { animation-delay: 2s; transform: rotate(240deg); }
+.glow-ray:nth-child(6) { animation-delay: 2.5s; transform: rotate(300deg); }
+
+@keyframes rayRotate {
+    0% { opacity: 0; transform: translateX(-50px) rotate(var(--rotation, 0deg)); }
+    50% { opacity: 1; }
+    100% { opacity: 0; transform: translateX(50px) rotate(var(--rotation, 0deg)); }
+}
+
+/* 闪烁星星 */
+.sparkle-star {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    font-size: 20px;
+    color: #fbbf24;
+    animation: sparkle 1.5s ease-in-out infinite;
+    opacity: 0;
+    filter: drop-shadow(0 0 4px rgba(251, 191, 36, 0.8));
+}
+
+.sparkle-1 { top: -15px; right: 0; animation-delay: 0s; }
+.sparkle-2 { bottom: 0; right: -15px; animation-delay: 0.5s; }
+.sparkle-3 { bottom: -15px; left: 0; animation-delay: 1s; }
+
+@keyframes sparkle {
+    0%, 100% {
+        opacity: 0;
+        transform: scale(0.5) rotate(0deg);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.2) rotate(180deg);
+    }
+}
+
+.leaderboard-icon-btn:hover .sparkle-star {
+    animation-duration: 0.8s;
+}
+
+/* 脉冲光环 */
+.leaderboard-pulse {
+    position: absolute;
+    inset: -10px;
+    border-radius: 50%;
+    border: 3px solid rgba(251, 191, 36, 0.5);
+    animation: pulse 2s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+        opacity: 0.5;
+    }
+    50% {
+        transform: scale(1.1);
+        opacity: 0.8;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 0.5;
+    }
+}
+
+/* 悬浮提示 */
+.leaderboard-tooltip {
+    position: absolute;
+    bottom: -40px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(30, 41, 59, 0.9);
+    backdrop-filter: blur(8px);
+    color: white;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.leaderboard-widget:hover .leaderboard-tooltip {
+    opacity: 1;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+    .leaderboard-btn-wrapper {
+        width: 60px;
+        height: 60px;
+    }
+
+    .leaderboard-icon-btn svg {
+        width: 30px;
+        height: 30px;
+    }
+
+    .leaderboard-tooltip {
+        display: none;
+    }
+}

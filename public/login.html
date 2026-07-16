@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - 你画我猜</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --bg-primary: #f8fafc;
+            --bg-secondary: #ffffff;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --error: #ef4444;
+            --success: #22c55e;
+        }
+        body {
+            background: linear-gradient(135deg, #e0e7ff 0%, #f8fafc 50%, #fef3c7 100%);
+            min-height: 100vh;
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .tab-active {
+            background: var(--accent);
+            color: white;
+        }
+        .tab-inactive {
+            background: #e2e8f0;
+            color: #64748b;
+        }
+        .form-input {
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #e2e8f0;
+            transition: all 0.2s ease;
+        }
+        .form-input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            outline: none;
+        }
+        .btn-primary {
+            background: var(--accent);
+            transition: all 0.2s ease;
+        }
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+        }
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .link-btn {
+            color: var(--accent);
+            cursor: pointer;
+            transition: color 0.2s ease;
+        }
+        .link-btn:hover {
+            color: var(--accent-hover);
+            text-decoration: underline;
+        }
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center p-4">
+    <div class="glass rounded-2xl shadow-xl w-full max-w-md p-8">
+        <!-- Logo -->
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-slate-800 mb-2">你画我猜</h1>
+            <p class="text-slate-500">登录您的账号</p>
+        </div>
+
+        <!-- 登录方式切换 -->
+        <div class="flex rounded-xl p-1 mb-6 bg-slate-100">
+            <button id="tabPassword" class="flex-1 py-2 px-4 rounded-lg font-medium transition-all tab-active" onclick="switchTab('password')">
+                密码登录
+            </button>
+            <button id="tabCode" class="flex-1 py-2 px-4 rounded-lg font-medium transition-all tab-inactive" onclick="switchTab('code')">
+                验证码登录
+            </button>
+        </div>
+
+        <!-- 消息提示 -->
+        <div id="messageBox" class="hidden mb-4 p-3 rounded-lg text-center text-sm"></div>
+
+        <!-- 密码登录表单 -->
+        <form id="passwordForm" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">邮箱</label>
+                <input type="email" id="passwordEmail" class="form-input w-full px-4 py-3 rounded-xl" placeholder="请输入邮箱" required>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">密码</label>
+                <div class="relative">
+                    <input type="password" id="passwordInput" class="form-input w-full px-4 py-3 rounded-xl pr-12" placeholder="请输入密码" required>
+                    <button type="button" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" onclick="togglePassword()">
+                        <svg id="eyeIcon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    </button>
+                </div>
+            </div>
+            <button type="submit" class="btn-primary w-full py-3 rounded-xl text-white font-medium">
+                登录
+            </button>
+        </form>
+
+        <!-- 验证码登录表单 -->
+        <form id="codeForm" class="hidden space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">邮箱</label>
+                <input type="email" id="codeEmail" class="form-input w-full px-4 py-3 rounded-xl" placeholder="请输入邮箱" required>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">验证码</label>
+                <div class="flex gap-2">
+                    <input type="text" id="verifyCode" class="form-input flex-1 px-4 py-3 rounded-xl" placeholder="请输入验证码" maxlength="6" required>
+                    <button type="button" id="sendCodeBtn" class="px-4 py-3 rounded-xl bg-slate-100 text-slate-600 font-medium hover:bg-slate-200 transition-colors whitespace-nowrap" onclick="sendCode()">
+                        发送验证码
+                    </button>
+                </div>
+            </div>
+            <button type="submit" class="btn-primary w-full py-3 rounded-xl text-white font-medium">
+                登录
+            </button>
+        </form>
+
+        <!-- 底部链接 -->
+        <div class="mt-6 text-center text-sm text-slate-500 space-x-4">
+            <span class="link-btn" onclick="goToRegister()">注册账号</span>
+            <span>|</span>
+            <span class="link-btn" onclick="goToResetPassword()">忘记密码？</span>
+        </div>
+
+        <!-- 游客登录 -->
+        <div class="mt-6 pt-6 border-t border-slate-200 text-center">
+            <button class="text-slate-500 hover:text-slate-700 text-sm" onclick="guestLogin()">
+                暂不登录，以游客身份进入
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        
+        // 切换登录方式
+        function switchTab(type) {
+            const passwordForm = document.getElementById('passwordForm');
+            const codeForm = document.getElementById('codeForm');
+            const tabPassword = document.getElementById('tabPassword');
+            const tabCode = document.getElementById('tabCode');
+            
+            if (type === 'password') {
+                passwordForm.classList.remove('hidden');
+                codeForm.classList.add('hidden');
+                tabPassword.className = 'flex-1 py-2 px-4 rounded-lg font-medium transition-all tab-active';
+                tabCode.className = 'flex-1 py-2 px-4 rounded-lg font-medium transition-all tab-inactive';
+            } else {
+                passwordForm.classList.add('hidden');
+                codeForm.classList.remove('hidden');
+                tabPassword.className = 'flex-1 py-2 px-4 rounded-lg font-medium transition-all tab-inactive';
+                tabCode.className = 'flex-1 py-2 px-4 rounded-lg font-medium transition-all tab-active';
+            }
+            hideMessage();
+        }
+
+        // 显示消息
+        function showMessage(text, type = 'error') {
+            const box = document.getElementById('messageBox');
+            box.textContent = text;
+            box.className = `mb-4 p-3 rounded-lg text-center text-sm ${type === 'error' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`;
+            box.classList.remove('hidden');
+        }
+
+        function hideMessage() {
+            document.getElementById('messageBox').classList.add('hidden');
+        }
+
+        // 切换密码显示
+        function togglePassword() {
+            const input = document.getElementById('passwordInput');
+            input.type = input.type === 'password' ? 'text' : 'password';
+        }
+
+        // 发送验证码
+        let sendCooldown = 0;
+        async function sendCode() {
+            const email = document.getElementById('codeEmail').value.trim();
+            if (!email) {
+                showMessage('请输入邮箱');
+                return;
+            }
+
+            const btn = document.getElementById('sendCodeBtn');
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`${API_BASE}/api/auth/send-code`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, type: 'login' })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    showMessage(data.message, 'success');
+                    startCooldown(60);
+                } else {
+                    showMessage(data.error || '发送失败');
+                    if (data.remainingTime) {
+                        startCooldown(data.remainingTime);
+                    }
+                    btn.disabled = false;
+                }
+            } catch (e) {
+                showMessage('网络错误，请重试');
+                btn.disabled = false;
+            }
+        }
+
+        function startCooldown(seconds) {
+            sendCooldown = seconds;
+            const btn = document.getElementById('sendCodeBtn');
+            const timer = setInterval(() => {
+                sendCooldown--;
+                if (sendCooldown > 0) {
+                    btn.textContent = `${sendCooldown}秒`;
+                } else {
+                    btn.textContent = '发送验证码';
+                    btn.disabled = false;
+                    clearInterval(timer);
+                }
+            }, 1000);
+        }
+
+        // 密码登录
+        document.getElementById('passwordForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideMessage();
+
+            const email = document.getElementById('passwordEmail').value.trim();
+            const password = document.getElementById('passwordInput').value;
+
+            if (!email || !password) {
+                showMessage('请填写完整信息');
+                return;
+            }
+
+            const btn = e.target.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            btn.textContent = '登录中...';
+
+            try {
+                const res = await fetch(`${API_BASE}/api/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    // 保存 Token
+                    localStorage.setItem('accessToken', data.accessToken);
+                    localStorage.setItem('refreshToken', data.refreshToken);
+                    localStorage.setItem('userInfo', JSON.stringify(data.user));
+                    localStorage.setItem('clientId', data.user.clientId);
+
+                    showMessage('登录成功，正在跳转...', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/lobby.html';
+                    }, 1000);
+                } else if (data.code === 'NO_PASSWORD') {
+                    showMessage('该账号未设置密码，请使用验证码登录');
+                    setTimeout(() => switchTab('code'), 1500);
+                } else {
+                    showMessage(data.error || '登录失败');
+                }
+            } catch (e) {
+                showMessage('网络错误，请重试');
+            }
+
+            btn.disabled = false;
+            btn.textContent = '登录';
+        });
+
+        // 验证码登录
+        document.getElementById('codeForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideMessage();
+
+            const email = document.getElementById('codeEmail').value.trim();
+            const code = document.getElementById('verifyCode').value.trim();
+
+            if (!email || !code) {
+                showMessage('请填写完整信息');
+                return;
+            }
+
+            const btn = e.target.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            btn.textContent = '登录中...';
+
+            try {
+                const res = await fetch(`${API_BASE}/api/auth/login-with-code`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, code })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    localStorage.setItem('accessToken', data.accessToken);
+                    localStorage.setItem('refreshToken', data.refreshToken);
+                    localStorage.setItem('userInfo', JSON.stringify(data.user));
+                    localStorage.setItem('clientId', data.user.clientId);
+
+                    showMessage('登录成功，正在跳转...', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/lobby.html';
+                    }, 1000);
+                } else {
+                    showMessage(data.error || '登录失败');
+                }
+            } catch (e) {
+                showMessage('网络错误，请重试');
+            }
+
+            btn.disabled = false;
+            btn.textContent = '登录';
+        });
+
+        // 页面跳转
+        function goToRegister() {
+            window.location.href = '/register.html';
+        }
+
+        function goToResetPassword() {
+            window.location.href = '/reset-password.html';
+        }
+
+        function guestLogin() {
+            // 清除可能存在的登录状态
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            localStorage.removeItem('userInfo');
+            
+            // 生成游客 clientId
+            if (!localStorage.getItem('clientId')) {
+                localStorage.setItem('clientId', 'guest_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9));
+            }
+            
+            window.location.href = '/lobby.html';
+        }
+
+        // 检查是否已登录
+        if (localStorage.getItem('accessToken')) {
+            // 已登录，直接跳转
+            window.location.href = '/lobby.html';
+        }
+    </script>
+</body>
+</html>

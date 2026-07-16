@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="avatarGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea"/>
+      <stop offset="100%" style="stop-color:#764ba2"/>
+    </linearGradient>
+  </defs>
+  <!-- 背景圆 -->
+  <circle cx="50" cy="50" r="48" fill="url(#avatarGrad)"/>
+  <!-- 人物头部 -->
+  <circle cx="50" cy="38" r="16" fill="#ffffff"/>
+  <!-- 人物身体 -->
+  <path d="M25 78 Q25 55 50 55 Q75 55 75 78" fill="#ffffff" opacity="0.9"/>
+  <!-- 眼睛 -->
+  <circle cx="44" cy="36" r="2.5" fill="#667eea"/>
+  <circle cx="56" cy="36" r="2.5" fill="#667eea"/>
+  <!-- 微笑 -->
+  <path d="M44 43 Q50 48 56 43" stroke="#667eea" stroke-width="2" fill="none" stroke-linecap="round"/>
+</svg>

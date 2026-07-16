@@ -1,0 +1,4 @@
+// 游戏服务器地址（通过 Nginx 反向代理，不需要端口）
+// 开发环境：http://localhost:3000
+// 生产环境：http://39.96.53.222
+export const SERVER_URL = process.env.NODE_ENV === 'production' ? 'http://39.96.53.222' : 'http://localhost:3000'

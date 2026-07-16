@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>排行榜 - 你画我猜游戏平台</title>
+    <link rel="stylesheet" href="/css/leaderboard.css">
+</head>
+<body>
+    <div class="leaderboard-container">
+        <!-- 头部 -->
+        <div class="leaderboard-header">
+            <button class="back-btn" onclick="goBack()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5"/>
+                    <path d="M12 19l-7-7 7-7"/>
+                </svg>
+            </button>
+            <h1 class="page-title">排行榜</h1>
+        </div>
+
+        <!-- 游戏切换 -->
+        <div class="game-tabs">
+            <button class="tab-btn active" onclick="switchGame('drawguess')">你画我猜</button>
+            <button class="tab-btn" onclick="switchGame('gobang')">五子棋</button>
+        </div>
+
+        <!-- 排序方式 -->
+        <div class="sort-options">
+            <span class="sort-label">排序:</span>
+            <select id="sortSelect" onchange="changeSort()">
+                <option value="score">分数</option>
+                <option value="wins">胜场</option>
+                <option value="games">场次</option>
+                <option value="rating">积分</option>
+            </select>
+        </div>
+
+        <!-- 我的排名 -->
+        <div class="my-rank-card" id="myRankCard" style="display: none;">
+            <div class="my-rank-header">
+                <span class="my-rank-label">我的排名</span>
+                <span class="my-rank-value" id="myRankValue">#--</span>
+            </div>
+            <div class="my-rank-stats">
+                <div class="stat-item">
+                    <span class="stat-value" id="myGames">0</span>
+                    <span class="stat-label">总场次</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="myWins">0</span>
+                    <span class="stat-label">胜场</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="myScore">0</span>
+                    <span class="stat-label">总分</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 排行榜列表 -->
+        <div class="leaderboard-list" id="leaderboardList">
+            <div class="loading">加载中...</div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let currentGame = 'drawguess';
+        let currentSort = 'score';
+        let myClientId = localStorage.getItem('clientId');
+
+        // 切换游戏
+        function switchGame(game) {
+            currentGame = game;
+            
+            // 更新标签样式
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.currentTarget.classList.add('active');
+
+            // 更新排序选项
+            const sortSelect = document.getElementById('sortSelect');
+            if (game === 'gobang') {
+                sortSelect.innerHTML = `
+                    <option value="rating">积分</option>
+                    <option value="wins">胜场</option>
+                    <option value="win_rate">胜率</option>
+                    <option value="total_games">场次</option>
+                `;
+                currentSort = 'rating';
+            } else {
+                sortSelect.innerHTML = `
+                    <option value="score">分数</option>
+                    <option value="wins">胜场</option>
+                    <option value="games">场次</option>
+                `;
+                currentSort = 'score';
+            }
+
+            loadLeaderboard();
+        }
+
+        // 切换排序
+        function changeSort() {
+            currentSort = document.getElementById('sortSelect').value;
+            loadLeaderboard();
+        }
+
+        // 加载排行榜
+        async function loadLeaderboard() {
+            const listEl = document.getElementById('leaderboardList');
+            listEl.innerHTML = '<div class="loading">加载中...</div>';
+
+            try {
+                let url;
+                if (currentGame === 'gobang') {
+                    url = `${API_BASE}/api/gobang/leaderboard?limit=50&orderBy=${currentSort}`;
+                } else {
+                    url = `${API_BASE}/api/leaderboard?limit=50`;
+                }
+
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (data.success && data.leaderboard) {
+                    renderLeaderboard(data.leaderboard);
+                } else {
+                    listEl.innerHTML = '<div class="empty">暂无数据</div>';
+                }
+            } catch (e) {
+                console.error('加载排行榜失败:', e);
+                listEl.innerHTML = '<div class="error">加载失败，请稍后重试</div>';
+            }
+        }
+
+        // 渲染排行榜
+        function renderLeaderboard(list) {
+            const listEl = document.getElementById('leaderboardList');
+            
+            if (list.length === 0) {
+                listEl.innerHTML = '<div class="empty">暂无数据</div>';
+                return;
+            }
+
+            let html = '';
+
+            list.forEach((player, index) => {
+                const rank = index + 1;
+                const rankClass = rank <= 3 ? `top-${rank}` : '';
+                const isMe = player.client_id === myClientId;
+
+                html += `
+                    <div class="rank-item ${rankClass} ${isMe ? 'is-me' : ''}">
+                        <div class="rank-number">${rank <= 3 ? getMedal(rank) : rank}</div>
+                        <div class="player-avatar">${player.avatar || player.nickname?.[0] || '?'}</div>
+                        <div class="player-info">
+                            <div class="player-name">${escapeHtml(player.nickname)}</div>
+                            ${isMe ? '<span class="me-badge">我</span>' : ''}
+                        </div>
+                        <div class="player-stats">
+                            ${getStatsHtml(player)}
+                        </div>
+                    </div>
+                `;
+
+                // 更新我的排名
+                if (isMe) {
+                    updateMyRank(player, rank);
+                }
+            });
+
+            listEl.innerHTML = html;
+        }
+
+        // 获取奖牌
+        function getMedal(rank) {
+            const medals = {
+                1: '🥇',
+                2: '🥈',
+                3: '🥉'
+            };
+            return medals[rank] || rank;
+        }
+
+        // 获取统计信息 HTML
+        function getStatsHtml(player) {
+            if (currentGame === 'gobang') {
+                return `
+                    <div class="stat">
+                        <span class="stat-value">${player.rating || 1000}</span>
+                        <span class="stat-label">积分</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value">${player.wins || 0}胜</span>
+                        <span class="stat-label">${player.losses || 0}负</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value">${player.win_rate || 0}%</span>
+                        <span class="stat-label">胜率</span>
+                    </div>
+                `;
+            } else {
+                return `
+                    <div class="stat">
+                        <span class="stat-value">${player.total_score || 0}</span>
+                        <span class="stat-label">分数</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value">${player.total_games || 0}</span>
+                        <span class="stat-label">场次</span>
+                    </div>
+                `;
+            }
+        }
+
+        // 更新我的排名
+        function updateMyRank(player, rank) {
+            const card = document.getElementById('myRankCard');
+            card.style.display = 'block';
+
+            document.getElementById('myRankValue').textContent = `#${rank}`;
+            
+            if (currentGame === 'gobang') {
+                document.getElementById('myGames').textContent = player.total_games || 0;
+                document.getElementById('myWins').textContent = player.wins || 0;
+                document.getElementById('myScore').textContent = player.rating || 1000;
+            } else {
+                document.getElementById('myGames').textContent = player.total_games || 0;
+                document.getElementById('myWins').textContent = '-';
+                document.getElementById('myScore').textContent = player.total_score || 0;
+            }
+        }
+
+        // HTML 转义
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 返回
+        function goBack() {
+            window.location.href = '/lobby.html';
+        }
+
+        // 初始化
+        loadLeaderboard();
+    </script>
+</body>
+</html>

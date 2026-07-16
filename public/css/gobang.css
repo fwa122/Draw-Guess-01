@@ -1,0 +1,616 @@
+/* 五子棋游戏样式 */
+
+/* CSS 变量 */
+:root {
+    --bg-primary: #f8fafc;
+    --bg-secondary: #ffffff;
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --accent: #3b82f6;
+    --accent-hover: #2563eb;
+    --error: #ef4444;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --border-color: #e2e8f0;
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* 重置样式 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* 基础样式 */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: linear-gradient(135deg, #e0e7ff 0%, #f8fafc 50%, #fef3c7 100%);
+    min-height: 100vh;
+    color: var(--text-primary);
+    line-height: 1.5;
+}
+
+/* 游戏容器 */
+.game-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* 游戏头部 */
+.game-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 600px;
+    margin-bottom: 16px;
+}
+
+.back-btn, .restart-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    border-radius: 10px;
+    border: none;
+    background: rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.back-btn:hover, .restart-btn:hover {
+    background: rgba(255, 255, 255, 1);
+    transform: translateY(-1px);
+}
+
+.back-btn svg, .restart-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+.game-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+/* 玩家面板 */
+.players-panel {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 600px;
+    margin-bottom: 16px;
+    gap: 12px;
+}
+
+.player-card {
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 12px;
+    padding: 12px 16px;
+    box-shadow: var(--shadow);
+    transition: all 0.3s ease;
+    flex: 1;
+}
+
+.player-card.active {
+    background: rgba(59, 130, 246, 0.15);
+    box-shadow: var(--shadow-lg);
+}
+
+.player-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.player-avatar.black {
+    background: #1e293b;
+}
+
+.player-avatar.white {
+    background: #ffffff;
+    border: 2px solid #e2e8f0;
+}
+
+.player-avatar svg {
+    width: 24px;
+    height: 24px;
+}
+
+.player-avatar.black svg {
+    fill: #1e293b;
+    color: #1e293b;
+}
+
+.player-avatar.white svg {
+    fill: #ffffff;
+    color: #94a3b8;
+}
+
+.player-info {
+    margin-left: 12px;
+}
+
+.player-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.player-status {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.player-timer {
+    margin-left: auto;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: 'Monaco', 'Consolas', monospace;
+}
+
+/* 游戏状态 */
+.game-status {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.current-turn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.turn-indicator {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+}
+
+.turn-indicator.black {
+    background: #1e293b;
+}
+
+.turn-indicator.white {
+    background: #ffffff;
+    border: 2px solid #e2e8f0;
+}
+
+.turn-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.move-count {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* ===== 观战者面板 ===== */
+.spectators-panel {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: var(--shadow-lg);
+    margin-top: 16px;
+}
+
+.spectators-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+}
+
+.spectators-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.spectators-empty {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 14px;
+    padding: 20px 0;
+}
+
+.spectator-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: rgba(139, 92, 246, 0.05);
+    border-radius: 12px;
+    transition: all 0.2s ease;
+}
+
+.spectator-item:hover {
+    background: rgba(139, 92, 246, 0.1);
+    transform: translateX(4px);
+}
+
+.spectator-avatar {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #8b5cf6, #6366f1);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+
+.spectator-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+/* 棋盘容器 */
+.board-container {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: var(--shadow-lg);
+    margin-bottom: 16px;
+}
+
+#gobangBoard {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+/* 控制面板 */
+.control-panel {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.control-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border-radius: 10px;
+    border: none;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(12px);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.control-btn:hover {
+    background: rgba(255, 255, 255, 1);
+    transform: translateY(-1px);
+}
+
+.control-btn.active {
+    background: var(--accent);
+    color: #ffffff;
+}
+
+.control-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* 历史记录面板 */
+.history-panel {
+    width: 100%;
+    max-width: 600px;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: var(--shadow);
+}
+
+.history-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+}
+
+.history-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+.history-empty {
+    color: var(--text-secondary);
+    font-size: 14px;
+    width: 100%;
+    text-align: center;
+}
+
+.history-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: 'Monaco', 'Consolas', monospace;
+}
+
+.history-item.black {
+    background: rgba(30, 41, 59, 0.1);
+}
+
+.history-item.white {
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid var(--border-color);
+}
+
+.history-index {
+    color: var(--text-secondary);
+}
+
+.history-color {
+    font-weight: 600;
+}
+
+.history-item.black .history-color {
+    color: #1e293b;
+}
+
+.history-item.white .history-color {
+    color: #64748b;
+}
+
+.history-position {
+    color: var(--text-primary);
+}
+
+/* 游戏结束弹窗 */
+.game-over-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+    z-index: 1000;
+}
+
+.game-over-modal.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.modal-content {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 20px;
+    padding: 32px;
+    text-align: center;
+    box-shadow: var(--shadow-lg);
+    animation: modalIn 0.3s ease;
+}
+
+@keyframes modalIn {
+    from {
+        transform: scale(0.9);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.winner-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    margin: 0 auto 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.winner-icon.black {
+    background: #1e293b;
+}
+
+.winner-icon.white {
+    background: #ffffff;
+    border: 3px solid #e2e8f0;
+}
+
+.winner-icon.draw {
+    background: #f1f5f9;
+}
+
+.winner-icon svg {
+    width: 40px;
+    height: 40px;
+}
+
+.winner-icon.black svg {
+    fill: #1e293b;
+    color: #1e293b;
+}
+
+.winner-icon.white svg {
+    fill: #ffffff;
+    color: #94a3b8;
+}
+
+.winner-icon.draw svg {
+    color: var(--text-secondary);
+}
+
+.winner-text {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 20px;
+}
+
+.game-stats {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+.game-stats .stat-item {
+    text-align: center;
+}
+
+.game-stats .stat-label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.game-stats .stat-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.modal-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 24px;
+    font-size: 14px;
+    font-weight: 500;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-primary {
+    background: var(--accent);
+    color: #ffffff;
+}
+
+.btn-primary:hover {
+    background: var(--accent-hover);
+    transform: translateY(-1px);
+}
+
+.btn-secondary {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.btn-secondary:hover {
+    background: #e2e8f0;
+}
+
+/* 响应式 */
+@media (max-width: 640px) {
+    .game-container {
+        padding: 12px;
+    }
+
+    .game-header {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .game-title {
+        order: -1;
+        width: 100%;
+        text-align: center;
+        margin-bottom: 8px;
+    }
+
+    .players-panel {
+        flex-direction: column;
+    }
+
+    .player-card {
+        width: 100%;
+    }
+
+    .game-status {
+        flex-direction: row;
+        width: 100%;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.85);
+        border-radius: 12px;
+        padding: 12px;
+        gap: 16px;
+    }
+
+    .board-container {
+        padding: 8px;
+    }
+
+    .control-panel {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .control-btn {
+        flex: 1;
+        min-width: 100px;
+        justify-content: center;
+    }
+
+    .history-panel {
+        max-width: 100%;
+    }
+}

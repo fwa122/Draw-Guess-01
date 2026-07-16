@@ -6,6 +6,8 @@
     <title>你画我猜 - 游戏大厅</title>
     <link rel="stylesheet" href="css/common.css">
     <link rel="stylesheet" href="css/lobby.css">
+    <link rel="stylesheet" href="css/toast.css">
+    <link rel="stylesheet" href="css/leaderboard-widget.css">
 </head>
 <body>
     <!-- 浮动光斑装饰 -->
@@ -47,7 +49,21 @@
         <div class="header-right">
             <div class="online-stats">
                 <div class="online-stats-dot"></div>
-                <span>1,234 人在线</span>
+                <span id="onlineStats">0 人在线</span>
+            </div>
+            <!-- 用户状态 -->
+            <div id="userStatus" class="user-status">
+                <button id="btnLogin" class="login-btn" onclick="window.location.href='/login.html'">登录</button>
+                <button id="btnRegister" class="register-btn" onclick="window.location.href='/register.html'">注册</button>
+            </div>
+            <div id="userInfo" class="user-info" style="display: none;">
+                <span id="userNickname" class="user-nickname">用户</span>
+                <button class="settings-btn" id="btnSettings" title="设置">
+                    <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                </button>
             </div>
         </div>
     </header>
@@ -184,9 +200,10 @@
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label">游戏模式</label>
+                        <label class="form-label">游戏类型</label>
                         <select class="form-select" id="gameMode">
-                            <option value="classic" selected>经典模式</option>
+                            <option value="classic" selected>经典模式（你画我猜）</option>
+                            <option value="gobang">五子棋对战</option>
                         </select>
                     </div>
 
@@ -278,9 +295,12 @@
 
     <!-- 外部脚本引用 -->
     <script src="/socket.io/socket.io.js"></script>
+    <script src="js/security.js"></script>
+    <script src="js/toast.js"></script>
     <script src="js/socket-client.js"></script>
     <script src="js/avatar-library.js"></script>
     <script src="js/bgm-manager.js"></script>
+    <script src="js/leaderboard-widget.js"></script>
     <script src="js/lobby.js"></script>
 
     <!-- 背景音乐 -->
@@ -292,6 +312,42 @@
         // 初始化 BGM 管理器
         window.addEventListener('DOMContentLoaded', () => {
             window.initBGM('bgm');
+        });
+
+        // 检查用户登录状态
+        function checkUserStatus() {
+            const userInfo = localStorage.getItem('userInfo');
+            const accessToken = localStorage.getItem('accessToken');
+            
+            const userStatusDiv = document.getElementById('userStatus');
+            const userInfoDiv = document.getElementById('userInfo');
+            const userNicknameSpan = document.getElementById('userNickname');
+            
+            if (accessToken && userInfo) {
+                try {
+                    const user = JSON.parse(userInfo);
+                    // 已登录
+                    userStatusDiv.style.display = 'none';
+                    userInfoDiv.style.display = 'flex';
+                    userNicknameSpan.textContent = user.nickname || '用户';
+                } catch (e) {
+                    // 数据解析失败，显示登录按钮
+                    userStatusDiv.style.display = 'flex';
+                    userInfoDiv.style.display = 'none';
+                }
+            } else {
+                // 未登录，显示登录/注册按钮
+                userStatusDiv.style.display = 'flex';
+                userInfoDiv.style.display = 'none';
+            }
+        }
+        
+        // 页面加载时检查用户状态
+        checkUserStatus();
+        
+        // 设置按钮跳转
+        document.getElementById('btnSettings')?.addEventListener('click', () => {
+            window.location.href = '/settings.html';
         });
     </script>
 </body>

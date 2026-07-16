@@ -7,10 +7,17 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "build": "pkg . --targets node18-win-x64 --output ../dist/你画我猜.exe"
+    "build": "pkg . --targets node18-win-x64 --output ../dist/你画我猜.exe",
+    "db:init": "node -e \"require('./db/init').initDatabase().then(() => process.exit())\"",
+    "db:test": "node -e \"require('./db/pool').testConnection().then(() => process.exit())\""
   },
   "dependencies": {
+    "bcrypt": "^5.1.1",
+    "dotenv": "^17.4.2",
     "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.22.6",
+    "nodemailer": "^6.9.8",
     "socket.io": "^4.7.2"
   },
   "devDependencies": {
@@ -19,10 +26,12 @@
   },
   "pkg": {
     "scripts": [
-      "words/**/*.js"
+      "words/**/*.js",
+      "db/**/*.js"
     ],
     "assets": [
       "data/**/*",
+      "db/schema.sql",
       "../public/**/*",
       "node_modules/socket.io/client-dist/**/*"
     ],

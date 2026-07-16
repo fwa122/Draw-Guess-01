@@ -1,0 +1,472 @@
+<template>
+	<scroll-view class="page" scroll-y="true">
+		<!-- 连接控制 -->
+		<view class="section">
+			<view class="section-header">
+				<text class="section-title">连接控制</text>
+			</view>
+			
+			<view class="input-group">
+				<input class="input" type="text" placeholder="服务器地址（如 http://192.168.1.100:3000）" v-model="serverUrl" />
+			</view>
+			
+			<view class="button-row">
+				<button v-if="!isConnected" class="btn-primary" @click="connect">
+					<text>连接</text>
+				</button>
+				<button v-else class="btn-danger" @click="disconnect">
+					<text>断开</text>
+				</button>
+			</view>
+		</view>
+
+		<!-- 连接状态 -->
+		<view class="section">
+			<view class="section-header">
+				<text class="section-title">连接状态</text>
+			</view>
+			
+			<view class="status-card">
+				<view class="status-row">
+					<text class="status-label">状态：</text>
+					<text :class="isConnected ? 'status-online' : 'status-offline'">{{ isConnected ? '在线' : '离线' }}</text>
+				</view>
+				<view class="status-row">
+					<text class="status-label">WebSocket URL：</text>
+					<text class="status-value">{{ wsUrl }}</text>
+				</view>
+				<view class="status-row">
+					<text class="status-label">客户端 ID：</text>
+					<text class="status-value">{{ playerId }}</text>
+				</view>
+				<view class="status-row">
+					<text class="status-label">重连次数：</text>
+					<text class="status-value">{{ reconnectAttempts }}</text>
+				</view>
+				<view class="status-row">
+					<text class="status-label">心跳状态：</text>
+					<text class="status-value">{{ heartbeatStatus }}</text>
+				</view>
+				<view class="status-row">
+					<text class="status-label">发送消息：</text>
+					<text class="status-value">{{ sendCount }}</text>
+				</view>
+				<view class="status-row">
+					<text class="status-label">接收消息：</text>
+					<text class="status-value">{{ receiveCount }}</text>
+				</view>
+			</view>
+		</view>
+
+		<!-- 快速测试 -->
+		<view class="section">
+			<view class="section-header">
+				<text class="section-title">快速测试</text>
+			</view>
+			
+			<view class="button-row">
+				<button class="btn-secondary" @click="getRooms">
+					<text>获取房间列表</text>
+				</button>
+				<button class="btn-secondary" @click="testHeartbeat">
+					<text>测试心跳</text>
+				</button>
+			</view>
+		</view>
+
+		<!-- 自定义测试 -->
+		<view class="section">
+			<view class="section-header">
+				<text class="section-title">自定义测试</text>
+			</view>
+			
+			<view class="input-group">
+				<input class="input" type="text" placeholder="事件名（如 getRooms）" v-model="testEvent" />
+			</view>
+			
+			<view class="input-group">
+				<textarea class="textarea" placeholder="数据（JSON 格式，可选）" v-model="testData" />
+			</view>
+			
+			<view class="button-row">
+				<button class="btn-primary" @click="sendTest">
+					<text>发送</text>
+				</button>
+			</view>
+		</view>
+
+		<!-- 消息日志 -->
+		<view class="section">
+			<view class="section-header">
+				<text class="section-title">消息日志</text>
+				<view class="clear-btn" @click="clearLogs">
+					<text>清空</text>
+				</view>
+			</view>
+			
+			<view class="log-container">
+				<view v-for="(log, index) in logs" :key="index" class="log-item" :class="'log-' + log.type">
+					<text class="log-time">{{ log.time }}</text>
+					<text class="log-message">{{ log.message }}</text>
+				</view>
+			</view>
+		</view>
+
+		<!-- 返回大厅 -->
+		<view class="section">
+			<view class="button-row">
+				<button class="btn-back" @click="goBackToLobby">
+					<text>返回大厅</text>
+				</button>
+			</view>
+		</view>
+	</scroll-view>
+</template>
+
+<script setup lang="uts">
+	import { ref, onMounted, onUnmounted } from 'vue'
+	import { socketClient } from '@/utils/socket-client.uts'
+	import { SERVER_URL } from '@/utils/config.uts'
+
+	// 状态
+	const serverUrl = ref(SERVER_URL)
+	const isConnected = ref(false)
+	const isConnecting = ref(false)
+	
+	const wsUrl = ref('')
+	const playerId = ref('')
+	const reconnectAttempts = ref(0)
+	const heartbeatStatus = ref('未启动')
+	const sendCount = ref(0)
+	const receiveCount = ref(0)
+	
+	const testEvent = ref('')
+	const testData = ref('')
+	
+	const logs = ref<any[]>([])
+
+	// 方法
+	function addLog(message: string, type: string): void {
+		const now = new Date()
+		const hours = now.getHours().toString().padStart(2, '0')
+		const minutes = now.getMinutes().toString().padStart(2, '0')
+		const seconds = now.getSeconds().toString().padStart(2, '0')
+		const time = hours + ':' + minutes + ':' + seconds
+		
+		const logItem = {
+			time: time,
+			type: type,
+			message: message
+		}
+		
+		logs.value.unshift(logItem)
+	}
+
+	function connect(): void {
+		if (isConnecting.value) return
+		
+		isConnecting.value = true
+		addLog('开始连接: ' + serverUrl.value, 'info')
+		
+		socketClient.connect(serverUrl.value)
+			.then((res: any) => {
+				isConnected.value = true
+				isConnecting.value = false
+				playerId.value = res.playerId
+				addLog('连接成功！ID: ' + res.playerId, 'success')
+				setupEventListeners()
+			})
+			.catch((error: any) => {
+				isConnecting.value = false
+				addLog('连接失败: ' + (error.message || '未知错误'), 'error')
+			})
+	}
+
+	function disconnect(): void {
+		socketClient.disconnect()
+		isConnected.value = false
+		playerId.value = ''
+		addLog('已断开连接', 'info')
+	}
+
+	function setupEventListeners(): void {
+		socketClient.on('connected', (data: any) => {
+			addLog('收到 connected 事件', 'success')
+		})
+
+		socketClient.on('roomList', (data: any) => {
+			addLog('收到房间列表: ' + JSON.stringify(data), 'success')
+		})
+
+		socketClient.on('_rawMessage', (data: any) => {
+			receiveCount.value++
+			const messageStr = JSON.stringify(data)
+			const displayMessage = messageStr.length > 200 ? messageStr.substring(0, 200) + '...' : messageStr
+			addLog('[原始消息] ' + displayMessage, 'info')
+		})
+
+		socketClient.on('disconnected', () => {
+			isConnected.value = false
+			addLog('连接已断开', 'error')
+		})
+	}
+
+	function getRooms(): void {
+		if (!isConnected.value) {
+			addLog('未连接，无法发送', 'error')
+			return
+		}
+		
+		socketClient.emit('getRooms', {})
+		sendCount.value++
+		addLog('发送: getRooms', 'info')
+	}
+
+	function testHeartbeat(): void {
+		addLog('心跳机制说明：每25秒发送一次ping', 'info')
+		addLog('服务器收到ping后会回复pong', 'info')
+		addLog('如果30秒内未收到pong，则判定连接断开', 'info')
+	}
+
+	function sendTest(): void {
+		if (!isConnected.value) {
+			addLog('未连接，无法发送', 'error')
+			return
+		}
+		
+		if (testEvent.value.trim().length == 0) {
+			addLog('请输入事件名', 'error')
+			return
+		}
+		
+		let data: any = {}
+		if (testData.value.trim().length > 0) {
+			try {
+				const parsed: UTSJSONObject = JSON.parse(testData.value) as UTSJSONObject
+				data = parsed
+			} catch (error) {
+				addLog('JSON 解析错误', 'error')
+				return
+			}
+		}
+		
+		socketClient.emit(testEvent.value.trim(), data)
+		sendCount.value++
+		addLog('发送: ' + testEvent.value.trim(), 'info')
+	}
+
+	function clearLogs(): void {
+		logs.value = []
+	}
+
+	function goBackToLobby(): void {
+		uni.navigateTo({
+			url: '/pages/lobby/lobby'
+		})
+	}
+
+	// 页面加载
+	onMounted(() => {
+		const status = socketClient.getStatus()
+		isConnected.value = status.isConnected
+		if (status.playerId != null) {
+			playerId.value = status.playerId
+		}
+	})
+
+	// 页面卸载
+	onUnmounted(() => {
+		// 保持连接状态
+	})
+</script>
+
+<style>
+	.page {
+		flex: 1;
+		background-color: #f8fafc;
+		padding: 20px;
+	}
+
+	.section {
+		margin-bottom: 20px;
+	}
+
+	.section-header {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 12px;
+	}
+
+	.section-title {
+		font-size: 16px;
+		font-weight: 700;
+		color: #1e293b;
+	}
+
+	.clear-btn {
+		padding: 4px 12px;
+		background-color: #f1f5f9;
+		border-radius: 6px;
+	}
+
+	.clear-btn text {
+		font-size: 12px;
+		color: #64748b;
+	}
+
+	.input-group {
+		margin-bottom: 12px;
+	}
+
+	.input {
+		background-color: #ffffff;
+		border-width: 1px;
+		border-color: #e2e8f0;
+		border-radius: 8px;
+		padding: 12px 16px;
+		font-size: 14px;
+		color: #1e293b;
+	}
+
+	.textarea {
+		background-color: #ffffff;
+		border-width: 1px;
+		border-color: #e2e8f0;
+		border-radius: 8px;
+		padding: 12px 16px;
+		font-size: 14px;
+		color: #1e293b;
+		height: 100px;
+	}
+
+	.button-row {
+		display: flex;
+		flex-direction: row;
+		margin-top: 12px;
+	}
+
+	.button-row button {
+		flex: 1;
+		margin-right: 12px;
+	}
+
+	.button-row button:last-child {
+		margin-right: 0px;
+	}
+
+	.btn-primary {
+		background-color: #3b82f6;
+		color: #ffffff;
+		border-radius: 8px;
+		padding: 12px 20px;
+		font-size: 14px;
+		font-weight: 600;
+	}
+
+	.btn-secondary {
+		background-color: #64748b;
+		color: #ffffff;
+		border-radius: 8px;
+		padding: 12px 20px;
+		font-size: 14px;
+		font-weight: 600;
+	}
+
+	.btn-danger {
+		background-color: #ef4444;
+		color: #ffffff;
+		border-radius: 8px;
+		padding: 12px 20px;
+		font-size: 14px;
+		font-weight: 600;
+	}
+
+	.btn-back {
+		background-color: #10b981;
+		color: #ffffff;
+		border-radius: 8px;
+		padding: 12px 20px;
+		font-size: 14px;
+		font-weight: 600;
+	}
+
+	.status-card {
+		background-color: #ffffff;
+		border-width: 1px;
+		border-color: #e2e8f0;
+		border-radius: 8px;
+		padding: 16px;
+	}
+
+	.status-row {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		margin-bottom: 8px;
+	}
+
+	.status-row:last-child {
+		margin-bottom: 0px;
+	}
+
+	.status-label {
+		font-size: 13px;
+		color: #64748b;
+		min-width: 120px;
+	}
+
+	.status-online {
+		font-size: 14px;
+		color: #10b981;
+		font-weight: 600;
+	}
+
+	.status-offline {
+		font-size: 14px;
+		color: #ef4444;
+		font-weight: 600;
+	}
+
+	.status-value {
+		font-size: 13px;
+		color: #1e293b;
+	}
+
+	.log-container {
+		background-color: #1e293b;
+		border-radius: 8px;
+		padding: 12px;
+		height: 300px;
+	}
+
+	.log-item {
+		display: flex;
+		flex-direction: row;
+		margin-bottom: 8px;
+	}
+
+	.log-time {
+		font-size: 11px;
+		color: #64748b;
+		min-width: 60px;
+	}
+
+	.log-message {
+		font-size: 12px;
+		color: #e2e8f0;
+	}
+
+	.log-info text {
+		color: #94a3b8;
+	}
+
+	.log-success text {
+		color: #10b981;
+	}
+
+	.log-error text {
+		color: #ef4444;
+	}
+</style>

@@ -9,6 +9,20 @@ let currentSelectedAvatar = null;
 let joinSelectedAvatar = null;
 let selectedRoom = null;
 
+// ===== 更新在线人数显示 =====
+function updateOnlineStats(stats) {
+    const onlineStats = document.getElementById('onlineStats');
+    if (onlineStats) {
+        const total = stats.total || stats;
+        const playing = stats.playing;
+        if (playing !== undefined) {
+            onlineStats.textContent = `${total.toLocaleString()} 人在线 (${playing} 游戏中)`;
+        } else {
+            onlineStats.textContent = `${total.toLocaleString()} 人在线`;
+        }
+    }
+}
+
 // ===== 渲染房间列表 =====
 function renderRooms(rooms) {
     const roomsGrid = document.getElementById('roomsGrid');
@@ -71,8 +85,8 @@ function renderRooms(rooms) {
                     </svg>
                 </div>`;
             }
-            // 显示玩家头像（名字首字或头像）
-            const display = player.avatar || player.name[0] || '?';
+            // 显示玩家头像（名字首字或头像）- XSS 防护
+            const display = escapeHtml(player.avatar || player.name[0] || '?');
             return `<div class="room-player-avatar" style="background: ${colors[index % colors.length]}">${display}</div>`;
         }).join('');
 
@@ -90,7 +104,7 @@ function renderRooms(rooms) {
 
         roomCard.innerHTML = `
             <div class="room-card-header">
-                <div class="room-name">${room.name}</div>
+                <div class="room-name">${escapeHtml(room.name)}</div>
                 <div class="room-status ${room.status}">${statusText[room.status] || '等待中'}</div>
             </div>
 
@@ -103,7 +117,7 @@ function renderRooms(rooms) {
                             <line x1="9" y1="15" x2="15" y2="15"></line>
                         </svg>
                     </span>
-                    <span class="room-id-text">房间ID: <strong>${room.code || room.id}</strong></span>
+                    <span class="room-id-text">房间ID: <strong>${escapeHtml(room.code || room.id)}</strong></span>
                 </div>
                 <div class="room-info-row">
                     <span class="room-info-icon">
@@ -144,7 +158,7 @@ function renderRooms(rooms) {
             </div>
 
             <div class="room-card-footer">
-                <button class="join-btn" ${!canJoin ? 'disabled' : ''} onclick="joinRoom('${room.code || room.id}')">
+                <button class="join-btn" ${!canJoin ? 'disabled' : ''} onclick="joinRoom('${escapeHtml(room.code || room.id)}')">
                     ${canJoin ? '加入房间' : room.status === 'playing' ? '游戏中' : '已满员'}
                 </button>
             </div>
@@ -245,27 +259,36 @@ btnConfirmCreate.addEventListener('click', async () => {
 
     // 检查Socket连接状态
     if (!socketClient.isConnected) {
-        alert('服务器未连接，请刷新页面重试');
+        Toast.error('服务器未连接，请刷新页面重试');
         return;
     }
 
     const roomName = document.getElementById('roomName').value.trim();
     if (!roomName) {
-        alert('请输入房间名称');
+        Toast.warning('请输入房间名称');
         return;
     }
 
     const nickname = document.getElementById('playerNickname').value.trim();
     if (!nickname) {
-        alert('请输入你的昵称');
+        Toast.warning('请输入你的昵称');
         return;
+    }
+
+    // 获取游戏类型
+    const gameMode = document.getElementById('gameMode').value || 'classic';
+
+    // 根据游戏类型设置参数
+    let maxPlayers = parseInt(document.getElementById('maxPlayers').value) || 6;
+    if (gameMode === 'gobang') {
+        maxPlayers = 2; // 五子棋固定2人
     }
 
     const options = {
         name: roomName,
-        maxPlayers: parseInt(document.getElementById('maxPlayers').value) || 6,
+        maxPlayers: maxPlayers,
         roundTime: parseInt(document.getElementById('roundTime').value) || 90,
-        gameMode: document.getElementById('gameMode').value || 'classic',
+        gameMode: gameMode,
         type: document.getElementById('roomType').value === 'private' ? '私密' : '经典模式',
         isPrivate: document.getElementById('roomType').value === 'private',
         password: document.getElementById('roomPassword').value || '',
@@ -274,18 +297,37 @@ btnConfirmCreate.addEventListener('click', async () => {
     };
 
     console.log('创建房间选项:', options);
+    console.log('游戏类型:', gameMode, '最大人数:', maxPlayers, '类型:', typeof maxPlayers);
+
+    // 关闭弹窗
+    createRoomModal.classList.remove('show');
+    document.getElementById('createRoomForm').reset();
+    passwordGroup.style.display = 'none';
+
+    // 根据游戏类型跳转到不同页面
+    if (gameMode === 'gobang') {
+        // 五子棋统一在游戏页面创建房间，避免大厅和游戏页重复调用 createRoom
+        const params = new URLSearchParams({
+            action: 'create',
+            roomName: roomName,
+            playerName: nickname,
+            playerAvatar: currentSelectedAvatar.svg,
+            clientId: socketClient.clientId,
+            maxPlayers: maxPlayers.toString(),
+            roundTime: options.roundTime.toString(),
+            isPrivate: options.isPrivate ? 'true' : 'false',
+            password: options.password
+        });
+        window.location.href = `gobang-online.html?${params.toString()}`;
+        return;
+    }
 
     try {
         const response = await socketClient.createRoom(options);
         console.log('创建房间响应:', response);
 
         if (response && response.success) {
-            // 关闭弹窗
-            createRoomModal.classList.remove('show');
-            document.getElementById('createRoomForm').reset();
-            passwordGroup.style.display = 'none';
-
-            // 跳转到房间页面
+            // 经典模式跳转到 room-lobby.html
             const params = new URLSearchParams({
                 roomCode: response.roomCode,
                 roomName: response.room.name,
@@ -301,7 +343,37 @@ btnConfirmCreate.addEventListener('click', async () => {
         }
     } catch (error) {
         console.error('创建房间失败:', error);
-        alert('创建房间失败: ' + error.message);
+        Toast.error('创建房间失败: ' + error.message);
+    }
+});
+
+// ===== 游戏类型切换逻辑 =====
+const gameModeSelect = document.getElementById('gameMode');
+const maxPlayersSelect = document.getElementById('maxPlayers');
+const roundTimeGroup = document.querySelector('#roundTime')?.closest('.form-group');
+
+// 监听游戏类型变化
+gameModeSelect.addEventListener('change', (e) => {
+    const mode = e.target.value;
+
+    if (mode === 'gobang') {
+        // 五子棋模式：固定人数为2人，禁用选择
+        maxPlayersSelect.value = '2';
+        maxPlayersSelect.disabled = true;
+
+        // 隐藏回合时间（五子棋不需要）
+        if (roundTimeGroup) {
+            roundTimeGroup.style.opacity = '0.5';
+            roundTimeGroup.querySelector('select').disabled = true;
+        }
+    } else {
+        // 经典模式：恢复默认设置
+        maxPlayersSelect.disabled = false;
+
+        if (roundTimeGroup) {
+            roundTimeGroup.style.opacity = '1';
+            roundTimeGroup.querySelector('select').disabled = false;
+        }
     }
 });
 
@@ -330,7 +402,7 @@ btnQuickMatch.addEventListener('click', () => {
             });
             window.location.href = `room-lobby.html?${params.toString()}`;
         } else {
-            alert(response.message || '快速匹配失败');
+            Toast.warning(response.message || '快速匹配失败');
         }
     });
 });
@@ -345,8 +417,49 @@ function joinRoom(roomId) {
         if (password === null) return;
     }
 
-    // 显示加入房间弹窗（设置昵称和头像）
+    // 所有房间都显示加入房间弹窗
     showJoinRoomModal(room);
+}
+
+// ===== 直接加入房间（无需弹窗） =====
+async function joinRoomDirect(roomId, nickname) {
+    try {
+        const response = await socketClient.joinRoom(roomId, nickname, null, null);
+        console.log('直接加入房间响应:', response);
+
+        if (response && response.success) {
+            // 根据游戏类型跳转到不同页面
+            const gameMode = response.room.gameMode || 'classic';
+
+            if (gameMode === 'gobang') {
+                // 五子棋跳转到 gobang-online.html
+                const params = new URLSearchParams({
+                    room: response.room.code || roomId,
+                    action: 'join',
+                    playerName: nickname,
+                    playerAvatar: joinSelectedAvatar?.svg || currentSelectedAvatar?.svg || '',
+                    clientId: socketClient.clientId
+                });
+                window.location.href = `gobang-online.html?${params.toString()}`;
+            } else {
+                // 经典模式跳转到 room-lobby.html
+                const params = new URLSearchParams({
+                    roomCode: response.room.code || roomId,
+                    roomName: response.room.name,
+                    maxPlayers: response.room.maxPlayers.toString(),
+                    roundTime: (response.room.roundTime || 90).toString(),
+                    roomType: response.room.gameMode || '经典模式',
+                    status: '等待中',
+                    isHost: 'false',
+                    playerName: nickname
+                });
+                window.location.href = `room-lobby.html?${params.toString()}`;
+            }
+        }
+    } catch (error) {
+        console.error('直接加入房间失败:', error);
+        Toast.error('加入房间失败: ' + error.message);
+    }
 }
 
 // ===== 显示加入房间弹窗 =====
@@ -412,17 +525,48 @@ if (btnConfirmJoin) {
     btnConfirmJoin.addEventListener('click', async () => {
         const nickname = document.getElementById('joinNickname').value.trim();
         if (!nickname) {
-            alert('请输入你的昵称');
+            Toast.warning('请输入你的昵称');
             return;
         }
 
         const roomCode = document.getElementById('joinRoomCode').value.trim();
         if (!roomCode) {
-            alert('房间号不存在');
+            Toast.error('房间号不存在');
             return;
         }
 
         const password = document.getElementById('joinPassword')?.value || '';
+
+        // 五子棋房间统一在游戏页面加入，避免大厅和游戏页重复调用 joinRoom
+        const room = selectedRoom || allRooms.find(r => r.id === roomCode || r.code === roomCode);
+        if (room && room.gameMode === 'gobang') {
+            // 私密房间先验证密码
+            if (room.isPrivate) {
+                try {
+                    const valid = await socketClient.validateRoomPassword(roomCode, password);
+                    if (!valid.success) {
+                        Toast.error(valid.message || '密码错误');
+                        return;
+                    }
+                } catch (error) {
+                    console.error('密码验证失败:', error);
+                    Toast.error('密码验证失败: ' + error.message);
+                    return;
+                }
+            }
+
+            joinRoomModal.classList.remove('show');
+            const params = new URLSearchParams({
+                room: roomCode,
+                action: 'join',
+                playerName: nickname,
+                playerAvatar: joinSelectedAvatar.svg,
+                clientId: socketClient.clientId,
+                password: password
+            });
+            window.location.href = `gobang-online.html?${params.toString()}`;
+            return;
+        }
 
         try {
             const response = await socketClient.joinRoom(roomCode, nickname, password, joinSelectedAvatar.svg);
@@ -431,7 +575,7 @@ if (btnConfirmJoin) {
             if (response && response.success) {
                 joinRoomModal.classList.remove('show');
 
-                // 跳转到房间页面
+                // 经典模式跳转到 room-lobby.html
                 const params = new URLSearchParams({
                     roomCode: response.room.code || roomCode,
                     roomName: response.room.name,
@@ -447,7 +591,7 @@ if (btnConfirmJoin) {
             }
         } catch (error) {
             console.error('加入房间失败:', error);
-            alert('加入房间失败: ' + error.message);
+            Toast.error('加入房间失败: ' + error.message);
         }
     });
 }
@@ -507,12 +651,33 @@ async function initSocket() {
             renderRooms(rooms);
         });
 
+        // 监听在线人数更新（服务端广播）
+        socketClient.on('onlineCount', (stats) => {
+            updateOnlineStats(stats);
+        });
+
         // 获取房间列表
         const rooms = await socketClient.getRoomList();
         console.log('获取房间列表:', rooms);
         allRooms = rooms;
         filteredRooms = rooms;
         renderRooms(rooms);
+
+        // 获取在线人数
+        socketClient.socket.emit('getOnlineCount', (response) => {
+            if (response && response.success) {
+                updateOnlineStats(response);
+            }
+        });
+
+        // 定时轮询在线人数（每10秒），作为广播的补充
+        setInterval(() => {
+            socketClient.socket.emit('getOnlineCount', (response) => {
+                if (response && response.success) {
+                    updateOnlineStats(response);
+                }
+            });
+        }, 10000);
 
     } catch (error) {
         console.error('连接失败:', error);

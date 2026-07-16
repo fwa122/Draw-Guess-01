@@ -1,0 +1,715 @@
+<template>
+	<view class="page-container">
+		<scroll-view class="page-scroll" scroll-y="true">
+			<view class="container">
+				<!-- 标题 -->
+				<view class="header">
+					<text class="title">Socket 通信测试</text>
+					<text class="subtitle">验证 uni-app x 与服务器的 WebSocket 连接</text>
+				</view>
+				
+				<!-- 连接配置 -->
+				<view class="section">
+					<text class="section-title">服务器配置</text>
+					
+					<view class="input-group">
+						<text class="label">服务器地址:</text>
+						<input 
+							class="input" 
+							v-model="serverUrl" 
+							placeholder="如: http://192.168.1.100:3000"
+						/>
+					</view>
+					
+					<view class="button-group">
+						<button 
+							class="btn btn-primary" 
+							:disabled="isConnecting || isConnected"
+							@click="connect"
+						>
+							{{ isConnecting ? '连接中...' : '连接' }}
+						</button>
+						
+						<button 
+							class="btn btn-danger" 
+							:disabled="!isConnected"
+							@click="disconnect"
+						>
+							断开
+						</button>
+					</view>
+				</view>
+				
+				<!-- 连接状态 -->
+				<view class="section">
+					<view class="status-bar">
+						<view :class="['status-dot', isConnected ? 'connected' : 'disconnected']"></view>
+						<text class="status-text">{{ statusText }}</text>
+					</view>
+				</view>
+				
+				<!-- 调试面板 -->
+				<view class="section debug-panel">
+					<text class="section-title">调试信息</text>
+					
+					<view class="debug-item">
+						<text class="debug-label">WebSocket URL:</text>
+						<text class="debug-value">{{ wsUrl }}</text>
+					</view>
+					
+					<view class="debug-item">
+						<text class="debug-label">连接状态:</text>
+						<text :class="['debug-value', isConnected ? 'success' : 'error']">{{ isConnected ? '已连接' : '未连接' }}</text>
+					</view>
+					
+					<view class="debug-item">
+						<text class="debug-label">客户端 ID:</text>
+						<text class="debug-value">{{ clientId }}</text>
+					</view>
+					
+					<view class="debug-item">
+						<text class="debug-label">重连次数:</text>
+						<text class="debug-value">{{ reconnectAttempts }}</text>
+					</view>
+					
+					<view class="debug-item">
+						<text class="debug-label">心跳状态:</text>
+						<text class="debug-value">{{ heartbeatStatus }}</text>
+					</view>
+					
+					<view class="debug-item">
+						<text class="debug-label">发送消息数:</text>
+						<text class="debug-value">{{ sendCount }}</text>
+					</view>
+					
+					<view class="debug-item">
+						<text class="debug-label">接收消息数:</text>
+						<text class="debug-value">{{ receiveCount }}</text>
+					</view>
+				</view>
+				
+				<!-- 测试功能 -->
+				<view class="section" v-if="isConnected">
+					<text class="section-title">测试功能</text>
+					
+					<!-- 测试发送消息 -->
+					<view class="input-group">
+						<text class="label">事件名:</text>
+						<input 
+							class="input" 
+							v-model="testEvent" 
+							placeholder="如: getRooms"
+						/>
+					</view>
+					
+					<view class="input-group">
+						<text class="label">数据 (JSON):</text>
+						<input 
+							class="input" 
+							v-model="testData" 
+							placeholder="如: {} 或留空"
+						/>
+					</view>
+					
+					<button class="btn btn-secondary" @click="sendTestMessage">
+						发送测试消息
+					</button>
+					
+					<!-- 快速测试按钮 -->
+					<view class="quick-tests">
+						<button class="btn-small" @click="getRoomList">获取房间列表</button>
+						<button class="btn-small" @click="createTestRoom">创建测试房间</button>
+						<button class="btn-small" @click="testHeartbeat">测试心跳</button>
+					</view>
+				</view>
+				
+				<!-- 消息详情面板 -->
+				<view class="section message-panel">
+					<text class="section-title">消息详情</text>
+					
+					<view class="debug-item">
+						<text class="debug-label">最后发送:</text>
+						<text class="debug-value message-preview">{{ lastSendMessage }}</text>
+					</view>
+					
+					<view class="debug-item">
+						<text class="debug-label">最后接收:</text>
+						<text class="debug-value message-preview">{{ lastReceiveMessage }}</text>
+					</view>
+					
+					<view class="debug-item">
+						<text class="debug-label">协议解析:</text>
+						<text class="debug-value message-preview">{{ protocolParsed }}</text>
+					</view>
+				</view>
+				
+				<!-- 日志区域 -->
+				<view class="section log-section">
+					<view class="log-header">
+						<text class="section-title">通信日志</text>
+						<button class="btn-small" @click="clearLogs">清空</button>
+					</view>
+					
+					<scroll-view class="log-container" scroll-y="true">
+						<view v-for="(log, index) in logs" :key="index" class="log-item">
+							<text :class="['log-text', log.type]">{{ log.time }} {{ log.message }}</text>
+						</view>
+						
+						<view v-if="logs.length == 0" class="log-empty">
+							<text class="log-text">暂无日志</text>
+						</view>
+					</scroll-view>
+				</view>
+			</view>
+		</scroll-view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { ref, computed, onMounted } from 'vue'
+	import { socketClient } from '@/utils/socket-client.uts'
+	import { SERVER_URL } from '@/utils/config.uts'
+	
+	// 日志类型定义
+	type LogItem = {
+		time: string,
+		type: string,
+		message: string
+	}
+	
+	// 响应式状态
+	const serverUrl = ref(SERVER_URL)
+	const isConnected = ref(false)
+	const isConnecting = ref(false)
+	
+	const testEvent = ref('getRooms')
+	const testData = ref('{}')
+	
+	const logs = ref<LogItem[]>([])
+	
+	// 调试信息
+	const wsUrl = ref('')
+	const clientId = ref('')
+	const reconnectAttempts = ref(0)
+	const heartbeatStatus = ref('未启动')
+	const sendCount = ref(0)
+	const receiveCount = ref(0)
+	const lastSendMessage = ref('')
+	const lastReceiveMessage = ref('')
+	const protocolParsed = ref('')
+	
+	// 计算属性
+	const statusText = computed((): string => {
+		if (isConnecting.value) return '连接中...'
+		if (isConnected.value) return '已连接'
+		return '未连接'
+	})
+	
+	/**
+	 * 添加日志
+	 */
+	function addLog(message: string, type: string): void {
+		const now: Date = new Date()
+		const hours: string = now.getHours().toString().padStart(2, '0')
+		const minutes: string = now.getMinutes().toString().padStart(2, '0')
+		const seconds: string = now.getSeconds().toString().padStart(2, '0')
+		const time: string = hours + ':' + minutes + ':' + seconds
+		
+		const logItem: LogItem = {
+			time: time,
+			type: type,
+			message: message
+		}
+		
+		logs.value.unshift(logItem)
+		
+		// 限制日志数量
+		if (logs.value.length > 100) {
+			logs.value.pop()
+		}
+	}
+	
+	/**
+	 * 清空日志
+	 */
+	function clearLogs(): void {
+		logs.value = []
+		sendCount.value = 0
+		receiveCount.value = 0
+		lastSendMessage.value = ''
+		lastReceiveMessage.value = ''
+		protocolParsed.value = ''
+	}
+	
+	/**
+	 * 更新调试信息
+	 */
+	function updateDebugInfo(): void {
+		const status = socketClient.getStatus()
+		isConnected.value = status.isConnected
+		
+		// 更新 WebSocket URL
+		if (serverUrl.value.startsWith('http://')) {
+			wsUrl.value = serverUrl.value.replace('http://', 'ws://') + '/socket.io/?EIO=4&transport=websocket'
+		} else if (serverUrl.value.startsWith('https://')) {
+			wsUrl.value = serverUrl.value.replace('https://', 'wss://') + '/socket.io/?EIO=4&transport=websocket'
+		} else {
+			wsUrl.value = serverUrl.value
+		}
+		
+		// 更新心跳状态
+		if (isConnected.value) {
+			heartbeatStatus.value = '运行中 (25秒间隔)'
+		} else {
+			heartbeatStatus.value = '未启动'
+		}
+		
+		// 更新客户端 ID
+		try {
+			const stored = uni.getStorageSync('draw_guess_client_id')
+			if (stored != null) {
+				clientId.value = stored as string
+			}
+		} catch (e) {
+			clientId.value = '获取失败'
+		}
+	}
+	
+	/**
+	 * 设置事件监听
+	 */
+	function setupEventListeners(): void {
+		// 监听房间列表
+		socketClient.on('roomList', (data: any) => {
+			receiveCount.value++
+			lastReceiveMessage.value = 'roomList'
+			protocolParsed.value = JSON.stringify(data)
+			addLog('收到房间列表', 'success')
+			addLog('数据: ' + JSON.stringify(data), 'info')
+		})
+		
+		// 监听房间更新
+		socketClient.on('roomUpdate', (data: any) => {
+			receiveCount.value++
+			lastReceiveMessage.value = 'roomUpdate'
+			protocolParsed.value = JSON.stringify(data)
+			addLog('房间更新', 'success')
+			addLog('数据: ' + JSON.stringify(data), 'info')
+		})
+		
+		// 监听断线
+		socketClient.on('disconnected', () => {
+			isConnected.value = false
+			heartbeatStatus.value = '已停止'
+			addLog('服务器断开连接', 'error')
+			updateDebugInfo()
+		})
+		
+		// 监听错误
+		socketClient.on('error', (err: any) => {
+			addLog('连接错误', 'error')
+			addLog('错误详情: ' + JSON.stringify(err), 'error')
+		})
+		
+		// 监听原始消息（用于调试）
+		socketClient.on('_rawMessage', (data: any) => {
+			// 直接使用 data 作为消息内容
+			const messageStr: string = JSON.stringify(data)
+			lastReceiveMessage.value = messageStr.length > 200 ? messageStr.substring(0, 200) + '...' : messageStr
+			
+			// 解析协议
+			if (messageStr.startsWith('42')) {
+				try {
+					const jsonStr: string = messageStr.substring(2)
+					const parsed = JSON.parse(jsonStr)
+					protocolParsed.value = JSON.stringify(parsed)
+				} catch (e) {
+					protocolParsed.value = '解析失败'
+				}
+			} else if (messageStr == '2') {
+				protocolParsed.value = '心跳 Ping'
+			} else if (messageStr == '3') {
+				protocolParsed.value = '心跳 Pong'
+			} else {
+				protocolParsed.value = messageStr
+			}
+		})
+	}
+	
+	/**
+	 * 连接服务器
+	 */
+	function connect(): void {
+		if (isConnecting.value || isConnected.value) return
+		
+		isConnecting.value = true
+		updateDebugInfo()
+		addLog('正在连接: ' + serverUrl.value, 'info')
+		addLog('WebSocket URL: ' + wsUrl.value, 'info')
+		
+		socketClient.connect(serverUrl.value).then(
+			(result) => {
+				isConnected.value = true
+				isConnecting.value = false
+				const playerId: string = result.playerId != null ? result.playerId : ''
+				addLog('连接成功！ playerId: ' + playerId, 'success')
+				
+				// 注册事件监听
+				setupEventListeners()
+				updateDebugInfo()
+			},
+			(error: Error) => {
+				isConnecting.value = false
+				addLog('连接失败: ' + error.message, 'error')
+				updateDebugInfo()
+			}
+		)
+	}
+	
+	/**
+	 * 断开连接
+	 */
+	function disconnect(): void {
+		socketClient.disconnect()
+		isConnected.value = false
+		heartbeatStatus.value = '已停止'
+		addLog('已断开连接', 'warning')
+		updateDebugInfo()
+	}
+	
+	/**
+	 * 发送测试消息
+	 */
+	function sendTestMessage(): void {
+		if (!isConnected.value) {
+			addLog('未连接，无法发送', 'error')
+			return
+		}
+		
+		let data: UTSJSONObject = {}
+		if (testData.value.trim().length > 0) {
+			try {
+				const parsed = JSON.parse(testData.value)
+				if (parsed != null) {
+					data = parsed as UTSJSONObject
+				}
+			} catch (error) {
+				addLog('JSON 解析错误', 'error')
+				return
+			}
+		}
+		
+		socketClient.emit(testEvent.value, data)
+		sendCount.value++
+		
+		// 构造发送的消息（用于调试显示）
+		const messageArray: any[] = [testEvent.value, data]
+		const message: string = '42' + JSON.stringify(messageArray)
+		lastSendMessage.value = message.length > 200 ? message.substring(0, 200) + '...' : message
+		
+		addLog('发送事件: ' + testEvent.value, 'info')
+		addLog('消息内容: ' + lastSendMessage.value, 'info')
+	}
+	
+	/**
+	 * 获取房间列表（快速测试）
+	 */
+	function getRoomList(): void {
+		socketClient.emit('getRooms', {})
+		sendCount.value++
+		lastSendMessage.value = '42["getRooms",{}]'
+		addLog('请求房间列表...', 'info')
+	}
+	
+	/**
+	 * 创建测试房间（快速测试）
+	 */
+	function createTestRoom(): void {
+		const options: UTSJSONObject = {
+			name: '测试房间',
+			playerName: '测试玩家',
+			maxPlayers: 4,
+			roundTime: 60
+		}
+		
+		socketClient.emit('createRoom', options)
+		sendCount.value++
+		lastSendMessage.value = '42["createRoom",' + JSON.stringify(options) + ']'
+		addLog('发送创建房间请求', 'info')
+	}
+	
+	/**
+	 * 测试心跳
+	 */
+	function testHeartbeat(): void {
+		if (!isConnected.value) {
+			addLog('未连接，无法测试心跳', 'error')
+			return
+		}
+		
+		addLog('手动发送心跳 Ping (2)', 'info')
+		addLog('等待服务器响应 Pong (3)', 'info')
+	}
+	
+	// 页面加载时的初始化
+	onMounted(() => {
+		addLog('Socket 通信测试页面已加载', 'info')
+		addLog('请输入服务器地址并点击连接', 'info')
+		
+		// 初始化调试信息
+		updateDebugInfo()
+		
+		// 检查连接状态
+		const status = socketClient.getStatus()
+		if (status.isConnected) {
+			isConnected.value = true
+			addLog('检测到已有连接', 'success')
+			setupEventListeners()
+			updateDebugInfo()
+		}
+	})
+</script>
+
+<style>
+	/* 页面容器 - 填满整个屏幕 */
+	.page-container {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+	}
+	
+	/* 页面滚动容器 - 占据剩余空间 */
+	.page-scroll {
+		flex: 1;
+	}
+	
+	.container {
+		padding: 20px;
+		background-color: #f8fafc;
+	}
+	
+	.header {
+		margin-bottom: 24px;
+	}
+	
+	.title {
+		font-size: 24px;
+		font-weight: 700;
+		color: #1e293b;
+		margin-bottom: 4px;
+	}
+	
+	.subtitle {
+		font-size: 14px;
+		color: #64748b;
+	}
+	
+	.section {
+		background-color: #ffffff;
+		border-radius: 12px;
+		padding: 16px;
+		margin-bottom: 16px;
+		box-shadow: 0 2px 8px rgba(148, 163, 184, 0.1);
+	}
+	
+	.section-title {
+		font-size: 16px;
+		font-weight: 700;
+		color: #1e293b;
+		margin-bottom: 12px;
+	}
+	
+	.input-group {
+		margin-bottom: 12px;
+	}
+	
+	.label {
+		font-size: 14px;
+		color: #64748b;
+		margin-bottom: 4px;
+	}
+	
+	.input {
+		background-color: #f1f5f9;
+		border: 1px solid #e2e8f0;
+		border-radius: 8px;
+		padding: 12px;
+		font-size: 14px;
+		color: #1e293b;
+		margin-top: 4px;
+	}
+	
+	.button-group {
+		display: flex;
+		flex-direction: row;
+		margin-top: 16px;
+	}
+	
+	.btn {
+		flex: 1;
+		padding: 12px 24px;
+		border-radius: 8px;
+		font-size: 14px;
+		font-weight: 700;
+		border: none;
+		margin-right: 12px;
+	}
+	
+	.btn-primary {
+		background-color: #6366f1;
+		color: #ffffff;
+	}
+	
+	.btn-secondary {
+		background-color: #f1f5f9;
+		color: #1e293b;
+	}
+	
+	.btn-danger {
+		background-color: #ef4444;
+		color: #ffffff;
+	}
+	
+	.btn:disabled {
+		opacity: 0.5;
+	}
+	
+	.btn-small {
+		padding: 6px 12px;
+		border-radius: 6px;
+		font-size: 12px;
+		background-color: #6366f1;
+		color: #ffffff;
+		border: none;
+		margin-right: 8px;
+	}
+	
+	.status-bar {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+	}
+	
+	.status-dot {
+		width: 12px;
+		height: 12px;
+		border-radius: 6px;
+		margin-right: 8px;
+	}
+	
+	.status-dot.connected {
+		background-color: #22c55e;
+	}
+	
+	.status-dot.disconnected {
+		background-color: #94a3b8;
+	}
+	
+	.status-text {
+		font-size: 14px;
+		font-weight: 400;
+		color: #1e293b;
+	}
+	
+	.quick-tests {
+		display: flex;
+		flex-direction: row;
+		margin-top: 12px;
+	}
+	
+	/* 调试面板样式 */
+	.debug-panel {
+		background-color: #fef3c7;
+		border: 2px solid #f59e0b;
+	}
+	
+	.message-panel {
+		background-color: #dbeafe;
+		border: 2px solid #3b82f6;
+	}
+	
+	.debug-item {
+		display: flex;
+		flex-direction: row;
+		margin-bottom: 8px;
+		padding-bottom: 8px;
+		border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+	}
+	
+	.debug-label {
+		font-size: 13px;
+		font-weight: 700;
+		color: #64748b;
+		min-width: 100px;
+		margin-right: 12px;
+	}
+	
+	.debug-value {
+		font-size: 13px;
+		color: #1e293b;
+		font-family: monospace;
+	}
+	
+	.debug-value.success {
+		color: #22c55e;
+	}
+	
+	.debug-value.error {
+		color: #ef4444;
+	}
+	
+	.message-preview {
+		font-size: 11px;
+		color: #1e293b;
+	}
+	
+	.log-section {
+		max-height: 400px;
+	}
+	
+	.log-header {
+		display: flex;
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 12px;
+	}
+	
+	.log-container {
+		height: 300px;
+		background-color: #1e293b;
+		border-radius: 8px;
+		padding: 12px;
+	}
+	
+	.log-item {
+		margin-bottom: 4px;
+	}
+	
+	.log-text {
+		font-size: 12px;
+		color: #e2e8f0;
+		font-family: monospace;
+	}
+	
+	.log-text.success {
+		color: #22c55e;
+	}
+	
+	.log-text.error {
+		color: #ef4444;
+	}
+	
+	.log-text.warning {
+		color: #f59e0b;
+	}
+	
+	.log-text.info {
+		color: #94a3b8;
+	}
+	
+	.log-empty {
+		text-align: center;
+		padding: 20px;
+	}
+</style>

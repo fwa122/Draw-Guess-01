@@ -1,0 +1,1212 @@
+<template>
+	<view class="page">
+		<!-- 顶部导航栏 -->
+		<view class="header">
+			<view class="header-left">
+				<view class="logo-icon">
+					<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M12 19l7-7 3 3-7 7-3-3z"></path>
+						<path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
+						<path d="M2 2l7.586 7.586"></path>
+						<circle cx="11" cy="11" r="2"></circle>
+					</svg>
+				</view>
+				<text class="logo-text">你画我猜</text>
+			</view>
+			<view class="header-right">
+				<view class="status-indicator" :class="isConnected ? 'online' : 'offline'">
+					<view class="status-dot"></view>
+					<text class="status-text">{{ isConnected ? '在线' : '离线' }}</text>
+				</view>
+				<view class="debug-btn" @click="openDebug">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+					</svg>
+				</view>
+			</view>
+		</view>
+
+		<!-- 离线提示 -->
+		<view v-if="!isConnected && !isConnecting" class="offline-banner">
+			<text class="offline-text">未连接到服务器，请检查服务器是否运行</text>
+			<button class="retry-btn" @click="retryConnect">
+				<text>重新连接</text>
+			</button>
+		</view>
+
+		<!-- 连接中提示 -->
+		<view v-if="isConnecting" class="connecting-banner">
+			<text class="connecting-text">正在连接服务器...</text>
+		</view>
+
+		<!-- 主内容区（可滚动） -->
+		<scroll-view class="content" scroll-y="true">
+			<!-- 操作按钮组 -->
+			<view class="action-section">
+				<button class="btn-primary" @click="createRoom">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<line x1="12" y1="5" x2="12" y2="19"></line>
+						<line x1="5" y1="12" x2="19" y2="12"></line>
+					</svg>
+					<text>创建房间</text>
+				</button>
+				<button class="btn-secondary" @click="quickMatch">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+					</svg>
+					<text>快速匹配</text>
+				</button>
+			</view>
+
+			<!-- 搜索栏 -->
+			<view class="search-bar">
+				<view class="search-input-wrapper">
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<circle cx="11" cy="11" r="8"></circle>
+						<path d="m21 21-4.35-4.35"></path>
+					</svg>
+					<input class="search-input" type="text" placeholder="搜索房间名称或ID..." v-model="searchKeyword" @input="filterRooms" />
+				</view>
+			</view>
+
+			<!-- 房间列表标题 -->
+			<view class="section-header">
+				<text class="section-title">房间列表</text>
+				<text class="room-count">共 {{ filteredRooms.length }} 个房间</text>
+			</view>
+
+			<!-- 房间列表 -->
+			<view class="rooms-list">
+				<view v-if="filteredRooms.length == 0" class="empty-state">
+					<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+						<polyline points="9 22 9 12 15 12 15 22"></polyline>
+					</svg>
+					<text class="empty-text">暂无房间</text>
+					<text class="empty-hint">点击"创建房间"开始游戏</text>
+				</view>
+
+				<view v-for="(room, index) in filteredRooms" :key="room.code" class="room-card" @click="joinRoom(room)">
+					<view class="room-header">
+						<text class="room-name">{{ room.name }}</text>
+						<view class="room-status-badge" :class="room.status">
+							<text>{{ room.status == 'waiting' ? '等待中' : '游戏中' }}</text>
+						</view>
+					</view>
+					<view class="room-info">
+						<view class="room-players">
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+								<circle cx="9" cy="7" r="4"></circle>
+								<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+								<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+							</svg>
+							<text>{{ room.playerCount }}/{{ room.maxPlayers }}</text>
+						</view>
+						<text class="room-code">ID: {{ room.code }}</text>
+					</view>
+					<view v-if="room.isPrivate" class="room-private-badge">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+							<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+						</svg>
+						<text>私密</text>
+					</view>
+				</view>
+			</view>
+		</scroll-view>
+
+		<!-- 创建房间弹窗 -->
+		<view v-if="showCreateModal" class="modal-overlay" @click="closeCreateModal">
+			<view class="modal-content" @click.stop="">
+				<view class="modal-header">
+					<text class="modal-title">创建房间</text>
+					<view class="modal-close" @click="closeCreateModal">
+						<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<line x1="18" y1="6" x2="6" y2="18"></line>
+							<line x1="6" y1="6" x2="18" y2="18"></line>
+						</svg>
+					</view>
+				</view>
+
+				<scroll-view class="modal-body" scroll-y="true">
+					<!-- 房间名称 -->
+					<view class="form-group">
+						<text class="form-label">房间名称</text>
+						<input class="form-input" type="text" placeholder="输入房间名称（最多20字）" maxlength="20" v-model="newRoom.name" />
+					</view>
+
+					<!-- 你的昵称 -->
+					<view class="form-group">
+						<text class="form-label">你的昵称</text>
+						<input class="form-input" type="text" placeholder="输入你的昵称（最多12字）" maxlength="12" v-model="newRoom.playerName" />
+					</view>
+
+					<!-- 头像选择 -->
+					<view class="form-group">
+						<text class="form-label">头像</text>
+						<view class="avatar-selector">
+							<view class="avatar-preview">
+								<text class="avatar-emoji">{{ getAvatarEmoji(newRoom.avatar) }}</text>
+							</view>
+							<button class="avatar-refresh-btn" @click="refreshAvatar">
+								<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<polyline points="23 4 23 10 17 10"></polyline>
+									<path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+								</svg>
+								<text>随机</text>
+							</button>
+						</view>
+					</view>
+
+					<!-- 房间设置 -->
+					<view class="form-row">
+						<view class="form-group form-group-half">
+							<text class="form-label">最大人数</text>
+							<view class="picker-btn" @click="showPicker('maxPlayers')">
+								<text>{{ maxPlayersOptions[newRoom.maxPlayersIndex].label }}</text>
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<polyline points="6 9 12 15 18 9"></polyline>
+								</svg>
+							</view>
+						</view>
+						<view class="form-group form-group-half">
+							<text class="form-label">回合时间</text>
+							<view class="picker-btn" @click="showPicker('roundTime')">
+								<text>{{ roundTimeOptions[newRoom.roundTimeIndex].label }}</text>
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<polyline points="6 9 12 15 18 9"></polyline>
+								</svg>
+							</view>
+						</view>
+					</view>
+
+					<!-- 房间类型 -->
+					<view class="form-group">
+						<text class="form-label">房间类型</text>
+						<view class="room-type-selector">
+							<view class="type-btn" :class="{ active: !newRoom.isPrivate }" @click="newRoom.isPrivate = false">
+								<text>公开</text>
+							</view>
+							<view class="type-btn" :class="{ active: newRoom.isPrivate }" @click="newRoom.isPrivate = true">
+								<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+									<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+								</svg>
+								<text>私密</text>
+							</view>
+						</view>
+					</view>
+
+					<!-- 密码（私密房间） -->
+					<view v-if="newRoom.isPrivate" class="form-group">
+						<text class="form-label">房间密码</text>
+						<input class="form-input" type="text" placeholder="输入4位数字密码" maxlength="4" v-model="newRoom.password" />
+					</view>
+				</scroll-view>
+
+				<view class="modal-footer">
+					<button class="btn-cancel" @click="closeCreateModal">
+						<text>取消</text>
+					</button>
+					<button class="btn-create" @click="confirmCreateRoom" :disabled="!canCreate">
+						<text>创建房间</text>
+					</button>
+				</view>
+			</view>
+		</view>
+
+		<!-- Picker 弹窗 -->
+		<view v-if="showPickerModal" class="picker-overlay" @click="closePickerModal">
+			<view class="picker-content" @click.stop="">
+				<view class="picker-header">
+					<text class="picker-title">{{ pickerTitle }}</text>
+				</view>
+				<scroll-view class="picker-list" scroll-y="true">
+					<view v-for="(option, index) in pickerOptions" :key="index" class="picker-item" :class="{ selected: pickerCurrentIndex == index }" @click="selectPickerOption(index)">
+						<text>{{ option.label }}</text>
+						<view v-if="pickerCurrentIndex == index" class="picker-check">
+							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+								<polyline points="20 6 9 17 4 12"></polyline>
+							</svg>
+						</view>
+					</view>
+				</scroll-view>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { ref, computed, onMounted, onUnmounted } from 'vue'
+	import { socketClient } from '@/utils/socket-client.uts'
+	import { SERVER_URL } from '@/utils/config.uts'
+
+	// 连接状态
+	const isConnected = ref(false)
+	const isConnecting = ref(false)
+	const playerId = ref('')
+
+	// 房间列表
+	const rooms = ref<any[]>([])
+	const searchKeyword = ref('')
+	const showCreateModal = ref(false)
+	const showPickerModal = ref(false)
+
+	// 新房间配置
+	const newRoom = ref({
+		name: '',
+		playerName: '',
+		avatar: 1,
+		maxPlayersIndex: 2, // 默认8人
+		roundTimeIndex: 1, // 默认90秒
+		isPrivate: false,
+		password: ''
+	})
+
+	// Picker 相关
+	const pickerType = ref('')
+	const pickerTitle = ref('')
+	const pickerOptions = ref<any[]>([])
+	const pickerCurrentIndex = ref(0)
+
+	// 选项配置
+	const maxPlayersOptions = [
+		{ label: '4人', value: 4 },
+		{ label: '6人', value: 6 },
+		{ label: '8人', value: 8 },
+		{ label: '10人', value: 10 }
+	]
+
+	const roundTimeOptions = [
+		{ label: '60秒', value: 60 },
+		{ label: '90秒', value: 90 },
+		{ label: '120秒', value: 120 }
+	]
+
+	// 头像列表
+	const avatarList = ['🎨', '🖌️', '✏️', '📝', '🎭', '🎪', '🎯', '🎲', '🧩', '🖼️']
+
+	// 计算属性
+	const filteredRooms = computed(() => {
+		let result = rooms.value
+		
+		if (searchKeyword.value.length > 0) {
+			const keyword = searchKeyword.value.toLowerCase()
+			result = result.filter((room: any) => {
+				const roomName = room.name.toLowerCase()
+				const roomCode = room.code.toLowerCase()
+				return roomName.indexOf(keyword) >= 0 || roomCode.indexOf(keyword) >= 0
+			})
+		}
+		
+		return result
+	})
+
+	const canCreate = computed(() => {
+		const nameValid = newRoom.value.name.trim().length > 0
+		const playerValid = newRoom.value.playerName.trim().length > 0
+		const passwordValid = !newRoom.value.isPrivate || newRoom.value.password.length == 4
+		return nameValid && playerValid && passwordValid
+	})
+
+	// 方法
+	function getAvatarEmoji(index: number): string {
+		const emojiList = ['🎨', '🖌️', '✏️', '📝', '🎭', '🎪', '🎯', '🎲', '🧩', '🖼️']
+		const idx = index % emojiList.length
+		return emojiList[idx]
+	}
+
+	function refreshAvatar(): void {
+		newRoom.value.avatar = Math.floor(Math.random() * avatarList.length) + 1
+	}
+
+	function filterRooms(): void {
+		// 过滤逻辑在 computed 中处理
+	}
+
+	function createRoom(): void {
+		if (!isConnected.value) {
+			uni.showToast({ title: '请先连接服务器', icon: 'none' })
+			return
+		}
+		showCreateModal.value = true
+	}
+
+	function closeCreateModal(): void {
+		showCreateModal.value = false
+	}
+
+	function showPicker(type: string): void {
+		pickerType.value = type
+		
+		if (type == 'maxPlayers') {
+			pickerTitle.value = '最大人数'
+			pickerOptions.value = maxPlayersOptions
+			pickerCurrentIndex.value = newRoom.value.maxPlayersIndex
+		} else if (type == 'roundTime') {
+			pickerTitle.value = '回合时间'
+			pickerOptions.value = roundTimeOptions
+			pickerCurrentIndex.value = newRoom.value.roundTimeIndex
+		}
+		
+		showPickerModal.value = true
+	}
+
+	function closePickerModal(): void {
+		showPickerModal.value = false
+	}
+
+	function selectPickerOption(index: number): void {
+		pickerCurrentIndex.value = index
+		
+		if (pickerType.value == 'maxPlayers') {
+			newRoom.value.maxPlayersIndex = index
+		} else if (pickerType.value == 'roundTime') {
+			newRoom.value.roundTimeIndex = index
+		}
+		
+		closePickerModal()
+	}
+
+	function confirmCreateRoom(): void {
+		if (!canCreate.value) {
+			return
+		}
+
+		const maxPlayers = maxPlayersOptions[newRoom.value.maxPlayersIndex].value
+		const roundTime = roundTimeOptions[newRoom.value.roundTimeIndex].value
+
+		socketClient.emit('createRoom', {
+			name: newRoom.value.name.trim(),
+			playerName: newRoom.value.playerName.trim(),
+			avatar: newRoom.value.avatar,
+			maxPlayers: maxPlayers,
+			roundTime: roundTime,
+			gameMode: 'classic',
+			isPrivate: newRoom.value.isPrivate,
+			password: newRoom.value.password
+		})
+
+		closeCreateModal()
+	}
+
+	function joinRoom(room: any): void {
+		if (!isConnected.value) {
+			uni.showToast({ title: '请先连接服务器', icon: 'none' })
+			return
+		}
+
+		if (room.status == 'playing') {
+			uni.showToast({ title: '游戏已开始', icon: 'none' })
+			return
+		}
+
+		if (room.playerCount >= room.maxPlayers) {
+			uni.showToast({ title: '房间已满', icon: 'none' })
+			return
+		}
+
+		if (room.isPrivate) {
+			// 弹出密码输入框
+			uni.showModal({
+				title: '输入房间密码',
+				editable: true,
+				placeholderText: '4位数字密码',
+				success: (res: any) => {
+					if (res.confirm) {
+						const password = res.content || ''
+						doJoinRoom(room.code, password)
+					}
+				}
+			})
+		} else {
+			doJoinRoom(room.code, '')
+		}
+	}
+
+	function doJoinRoom(roomCode: string, password: string): void {
+		// 先让用户输入昵称
+		uni.showModal({
+			title: '输入昵称',
+			editable: true,
+			placeholderText: '你的昵称',
+			success: (res: any) => {
+				if (res.confirm) {
+					const playerName = res.content || '玩家'
+					socketClient.emit('joinRoom', {
+						roomCode: roomCode,
+						playerName: playerName.trim(),
+						password: password,
+						avatar: Math.floor(Math.random() * avatarList.length) + 1
+					})
+				}
+			}
+		})
+	}
+
+	function quickMatch(): void {
+		if (!isConnected.value) {
+			uni.showToast({ title: '请先连接服务器', icon: 'none' })
+			return
+		}
+
+		// 寻找等待中的非私密房间
+		const availableRoom = rooms.value.find((room: any) => {
+			return room.status == 'waiting' && !room.isPrivate && room.playerCount < room.maxPlayers
+		})
+
+		if (availableRoom != null) {
+			joinRoom(availableRoom)
+		} else {
+			uni.showToast({ title: '暂无可用房间', icon: 'none' })
+		}
+	}
+
+	function openDebug(): void {
+		uni.navigateTo({
+			url: '/pages/debug/debug'
+		})
+	}
+
+	function retryConnect(): void {
+		autoConnect()
+	}
+
+	// 自动连接
+	function autoConnect(): void {
+		if (isConnected.value || isConnecting.value) return
+		
+		isConnecting.value = true
+		
+		// 获取服务器地址（从本地存储或默认）
+		let serverUrl = uni.getStorageSync('draw_guess_server_url')
+		if (serverUrl.length == 0) {
+			serverUrl = SERVER_URL
+		}
+		
+		console.log('[Lobby] 开始自动连接:', serverUrl)
+		
+		socketClient.connect(serverUrl)
+			.then((res: any) => {
+				isConnected.value = true
+				isConnecting.value = false
+				playerId.value = res.playerId
+				console.log('[Lobby] 自动连接成功')
+				
+				// 获取房间列表
+				socketClient.emit('getRooms', {})
+			})
+			.catch((error: any) => {
+				isConnecting.value = false
+				isConnected.value = false
+				console.log('[Lobby] 自动连接失败:', error.message)
+			})
+	}
+
+	// Socket 事件处理
+	function setupSocketEvents(): void {
+		socketClient.on('roomList', (data: any) => {
+			rooms.value = data
+		})
+
+		socketClient.on('roomCreated', (data: any) => {
+			if (data.success) {
+				uni.showToast({ title: '房间创建成功', icon: 'success' })
+				// 跳转到房间等待页面
+				uni.navigateTo({
+					url: '/pages/room-lobby/room-lobby?roomCode=' + data.room.code
+				})
+			} else {
+				uni.showToast({ title: '创建失败', icon: 'none' })
+			}
+		})
+
+		socketClient.on('roomJoined', (data: any) => {
+			if (data.success) {
+				uni.showToast({ title: '加入成功', icon: 'success' })
+				// 跳转到房间等待页面
+				uni.navigateTo({
+					url: '/pages/room-lobby/room-lobby?roomCode=' + data.room.code
+				})
+			} else {
+				uni.showToast({ title: data.message || '加入失败', icon: 'none' })
+			}
+		})
+
+		socketClient.on('error', (data: any) => {
+			uni.showToast({ title: data.message || '错误', icon: 'none' })
+		})
+
+		socketClient.on('disconnected', () => {
+			isConnected.value = false
+			playerId.value = ''
+		})
+	}
+
+	// 页面加载
+	onMounted(() => {
+		setupSocketEvents()
+		
+		// 检查连接状态
+		const status = socketClient.getStatus()
+		if (status.isConnected) {
+			isConnected.value = true
+			playerId.value = status.playerId != null ? status.playerId : ''
+			socketClient.emit('getRooms', {})
+		} else {
+			// 自动连接
+			autoConnect()
+		}
+	})
+
+	// 页面卸载
+	onUnmounted(() => {
+		// 保持连接状态
+	})
+</script>
+
+<style>
+	/* 页面基础 */
+	.page {
+		flex: 1;
+		background-color: #f8fafc;
+	}
+
+	/* 顶部导航栏 */
+	.header {
+		padding: 16px 20px;
+		background-color: rgba(255, 255, 255, 0.95);
+		border-bottom-width: 1px;
+		border-bottom-color: #e2e8f0;
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.header-left {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.logo-icon {
+		width: 40px;
+		height: 40px;
+		background-color: #3b82f6;
+		border-radius: 10px;
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+		margin-right: 12px;
+	}
+
+	.logo-icon svg {
+		color: #ffffff;
+	}
+
+	.logo-text {
+		font-size: 20px;
+		font-weight: 700;
+		color: #1e293b;
+	}
+
+	.header-right {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.status-indicator {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		padding: 6px 12px;
+		border-radius: 8px;
+		margin-right: 12px;
+	}
+
+	.status-indicator.online {
+		background-color: #dcfce7;
+	}
+
+	.status-indicator.offline {
+		background-color: #fee2e2;
+	}
+
+	.status-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 4px;
+		margin-right: 6px;
+	}
+
+	.status-indicator.online .status-dot {
+		background-color: #10b981;
+	}
+
+	.status-indicator.offline .status-dot {
+		background-color: #ef4444;
+	}
+
+	.status-text {
+		font-size: 13px;
+		font-weight: 600;
+	}
+
+	.status-indicator.online .status-text {
+		color: #166534;
+	}
+
+	.status-indicator.offline .status-text {
+		color: #991b1b;
+	}
+
+	.debug-btn {
+		padding: 8px;
+	}
+
+	.debug-btn svg {
+		color: #64748b;
+	}
+
+	/* 离线提示 */
+	.offline-banner {
+		padding: 12px 20px;
+		background-color: #fee2e2;
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.offline-text {
+		font-size: 14px;
+		color: #991b1b;
+		flex: 1;
+	}
+
+	.retry-btn {
+		background-color: #ef4444;
+		color: #ffffff;
+		border-radius: 6px;
+		padding: 8px 16px;
+		font-size: 13px;
+	}
+
+	/* 连接中提示 */
+	.connecting-banner {
+		padding: 12px 20px;
+		background-color: #dbeafe;
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.connecting-text {
+		font-size: 14px;
+		color: #1e40af;
+	}
+
+	/* 主内容区 */
+	.content {
+		flex: 1;
+		padding: 20px;
+	}
+
+	/* 操作按钮组 */
+	.action-section {
+		display: flex;
+		flex-direction: row;
+		margin-bottom: 20px;
+	}
+
+	.action-section button {
+		flex: 1;
+		margin-right: 12px;
+	}
+
+	.action-section button:last-child {
+		margin-right: 0px;
+	}
+
+	.btn-primary {
+		background-color: #3b82f6;
+		color: #ffffff;
+		border-radius: 12px;
+		padding: 14px 20px;
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+		font-size: 15px;
+		font-weight: 600;
+	}
+
+	.btn-primary svg {
+		margin-right: 8px;
+	}
+
+	.btn-secondary {
+		background-color: #10b981;
+		color: #ffffff;
+		border-radius: 12px;
+		padding: 14px 20px;
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+		font-size: 15px;
+		font-weight: 600;
+	}
+
+	.btn-secondary svg {
+		margin-right: 8px;
+	}
+
+	/* 搜索栏 */
+	.search-bar {
+		margin-bottom: 20px;
+	}
+
+	.search-input-wrapper {
+		background-color: #ffffff;
+		border-radius: 10px;
+		padding: 12px 16px;
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		border-width: 1px;
+		border-color: #e2e8f0;
+	}
+
+	.search-input-wrapper svg {
+		color: #94a3b8;
+		margin-right: 12px;
+	}
+
+	.search-input {
+		flex: 1;
+		font-size: 14px;
+		color: #1e293b;
+	}
+
+	/* 区域标题 */
+	.section-header {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 16px;
+	}
+
+	.section-title {
+		font-size: 18px;
+		font-weight: 700;
+		color: #1e293b;
+	}
+
+	.room-count {
+		font-size: 14px;
+		color: #64748b;
+	}
+
+	/* 房间列表 */
+	.rooms-list {
+		/* 无特殊样式 */
+	}
+
+	.empty-state {
+		padding: 60px 20px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.empty-state svg {
+		color: #cbd5e1;
+		margin-bottom: 16px;
+	}
+
+	.empty-text {
+		font-size: 16px;
+		color: #64748b;
+		margin-bottom: 8px;
+	}
+
+	.empty-hint {
+		font-size: 14px;
+		color: #94a3b8;
+	}
+
+	/* 房间卡片 */
+	.room-card {
+		background-color: #ffffff;
+		border-radius: 12px;
+		padding: 16px;
+		margin-bottom: 12px;
+		border-width: 1px;
+		border-color: #e2e8f0;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.room-header {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 12px;
+	}
+
+	.room-name {
+		font-size: 16px;
+		font-weight: 600;
+		color: #1e293b;
+		flex: 1;
+	}
+
+	.room-status-badge {
+		padding: 4px 12px;
+		border-radius: 6px;
+		font-size: 12px;
+	}
+
+	.room-status-badge.waiting {
+		background-color: #dbeafe;
+		color: #1e40af;
+	}
+
+	.room-status-badge.playing {
+		background-color: #fef3c7;
+		color: #92400e;
+	}
+
+	.room-info {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.room-players {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		color: #64748b;
+		font-size: 14px;
+	}
+
+	.room-players svg {
+		margin-right: 6px;
+	}
+
+	.room-code {
+		font-size: 13px;
+		color: #94a3b8;
+	}
+
+	.room-private-badge {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		background-color: #f1f5f9;
+		padding: 4px 8px;
+		border-radius: 4px;
+		margin-top: 12px;
+		align-self: flex-start;
+	}
+
+	.room-private-badge svg {
+		color: #64748b;
+		margin-right: 4px;
+	}
+
+	.room-private-badge text {
+		font-size: 12px;
+		color: #64748b;
+	}
+
+	/* 弹窗基础样式 */
+	.modal-overlay {
+		position: fixed;
+		top: 0px;
+		left: 0px;
+		right: 0px;
+		bottom: 0px;
+		background-color: rgba(0, 0, 0, 0.5);
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.modal-content {
+		background-color: #ffffff;
+		border-radius: 20px;
+		width: 85%;
+		max-width: 400px;
+		max-height: 80%;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.modal-header {
+		padding: 20px;
+		border-bottom-width: 1px;
+		border-bottom-color: #e2e8f0;
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.modal-title {
+		font-size: 18px;
+		font-weight: 700;
+		color: #1e293b;
+	}
+
+	.modal-close {
+		padding: 8px;
+	}
+
+	.modal-close svg {
+		color: #64748b;
+	}
+
+	.modal-body {
+		flex: 1;
+		padding: 20px;
+	}
+
+	.modal-footer {
+		padding: 20px;
+		border-top-width: 1px;
+		border-top-color: #e2e8f0;
+		display: flex;
+		flex-direction: row;
+	}
+
+	.modal-footer button {
+		flex: 1;
+		margin-right: 12px;
+	}
+
+	.modal-footer button:last-child {
+		margin-right: 0px;
+	}
+
+	.btn-cancel {
+		background-color: #f1f5f9;
+		color: #64748b;
+		border-radius: 10px;
+		padding: 12px 20px;
+		font-size: 15px;
+	}
+
+	.btn-create {
+		background-color: #3b82f6;
+		color: #ffffff;
+		border-radius: 10px;
+		padding: 12px 20px;
+		font-size: 15px;
+		font-weight: 600;
+	}
+
+	/* 表单样式 */
+	.form-group {
+		margin-bottom: 16px;
+	}
+
+	.form-group-half {
+		flex: 1;
+		margin-right: 12px;
+	}
+
+	.form-group-half:last-child {
+		margin-right: 0px;
+	}
+
+	.form-label {
+		font-size: 14px;
+		color: #64748b;
+		margin-bottom: 8px;
+		display: block;
+	}
+
+	.form-input {
+		background-color: #f8fafc;
+		border-radius: 8px;
+		padding: 12px 16px;
+		font-size: 15px;
+		color: #1e293b;
+		border-width: 1px;
+		border-color: #e2e8f0;
+	}
+
+	.form-row {
+		display: flex;
+		flex-direction: row;
+		margin-bottom: 16px;
+	}
+
+	.picker-btn {
+		background-color: #f8fafc;
+		border-radius: 8px;
+		padding: 12px 16px;
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		border-width: 1px;
+		border-color: #e2e8f0;
+	}
+
+	.picker-btn text {
+		font-size: 15px;
+		color: #1e293b;
+	}
+
+	.picker-btn svg {
+		color: #94a3b8;
+	}
+
+	/* 头像选择器 */
+	.avatar-selector {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.avatar-preview {
+		width: 60px;
+		height: 60px;
+		background-color: #dbeafe;
+		border-radius: 12px;
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+		margin-right: 12px;
+	}
+
+	.avatar-emoji {
+		font-size: 32px;
+	}
+
+	.avatar-refresh-btn {
+		background-color: #f1f5f9;
+		color: #64748b;
+		border-radius: 8px;
+		padding: 8px 16px;
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		font-size: 14px;
+	}
+
+	.avatar-refresh-btn svg {
+		margin-right: 6px;
+	}
+
+	/* 房间类型选择器 */
+	.room-type-selector {
+		display: flex;
+		flex-direction: row;
+	}
+
+	.type-btn {
+		flex: 1;
+		padding: 12px 16px;
+		border-radius: 8px;
+		margin-right: 12px;
+		background-color: #f1f5f9;
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.type-btn:last-child {
+		margin-right: 0px;
+	}
+
+	.type-btn.active {
+		background-color: #3b82f6;
+		color: #ffffff;
+	}
+
+	.type-btn svg {
+		margin-right: 8px;
+	}
+
+	.type-btn text {
+		font-size: 15px;
+	}
+
+	/* Picker 弹窗 */
+	.picker-overlay {
+		position: fixed;
+		top: 0px;
+		left: 0px;
+		right: 0px;
+		bottom: 0px;
+		background-color: rgba(0, 0, 0, 0.5);
+		display: flex;
+		flex-direction: row;
+		align-items: flex-end;
+		justify-content: center;
+	}
+
+	.picker-content {
+		background-color: #ffffff;
+		border-radius: 20px 20px 0px 0px;
+		width: 100%;
+		max-height: 50%;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.picker-header {
+		padding: 20px;
+		border-bottom-width: 1px;
+		border-bottom-color: #e2e8f0;
+	}
+
+	.picker-title {
+		font-size: 16px;
+		font-weight: 600;
+		color: #1e293b;
+	}
+
+	.picker-list {
+		flex: 1;
+		padding: 8px 0px;
+	}
+
+	.picker-item {
+		padding: 16px 20px;
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.picker-item.selected {
+		background-color: #dbeafe;
+	}
+
+	.picker-item text {
+		font-size: 16px;
+		color: #1e293b;
+	}
+
+	.picker-check svg {
+		color: #3b82f6;
+	}
+</style>

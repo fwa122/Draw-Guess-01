@@ -23,6 +23,7 @@ Thumbs.db
 # ===== 日志文件 =====
 logs/
 *.log
+winscp.log
 
 # ===== 临时文件 =====
 tmp/
@@ -32,6 +33,8 @@ temp/
 # ===== 打包产物（不提交到 Git）=====
 dist/
 *.exe
+APP/**/unpackage/
+APP/**/node_modules/
 
 # ===== 用户上传词库(未来功能) =====
 server/user-packs/
@@ -39,3 +42,16 @@ server/user-packs/
 # ===== 备份文件 =====
 *.bak
 backup/
+
+# ===== 服务器配置（包含敏感信息）=====
+nginx/
+nginx-fix.conf
+upload-script.txt
+check-env.js
+
+# ===== 本地测试文件 =====
+AAAAASTM32/
+
+# ===== 部署打包文件 =====
+*.zip
+*.tar.gz

@@ -1,15 +1,27 @@
 {
-	"pages": [ //pages数组中第一项表示应用启动页，参考：https://doc.dcloud.net.cn/uni-app-x/collocation/pagesjson.html
+	"pages": [
 		{
-			"path": "pages/index/index",
+			"path": "pages/lobby/lobby",
 			"style": {
-				"navigationBarTitleText": "uni-app x"
+				"navigationBarTitleText": "游戏大厅"
+			}
+		},
+		{
+			"path": "pages/room-lobby/room-lobby",
+			"style": {
+				"navigationBarTitleText": "房间"
+			}
+		},
+		{
+			"path": "pages/debug/debug",
+			"style": {
+				"navigationBarTitleText": "调试台"
 			}
 		}
 	],
 	"globalStyle": {
 		"navigationBarTextStyle": "black",
-		"navigationBarTitleText": "uni-app x",
+		"navigationBarTitleText": "你画我猜",
 		"navigationBarBackgroundColor": "#F8F8F8",
 		"backgroundColor": "#F8F8F8"
 	},

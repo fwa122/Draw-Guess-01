@@ -6,6 +6,7 @@
     <title>房间详情 - 你画我猜</title>
     <link rel="stylesheet" href="css/common.css">
     <link rel="stylesheet" href="css/room-lobby.css">
+    <link rel="stylesheet" href="css/toast.css">
 </head>
 <body>
     <!-- 背景装饰 -->
@@ -120,6 +121,20 @@
             <div class="players-grid" id="playersGrid">
                 <!-- 玩家卡片会动态生成 -->
             </div>
+
+            <!-- 观战者列表 -->
+            <div class="spectators-section" id="spectatorsSection" style="display: none;">
+                <div class="spectators-header">
+                    <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                    <span>观战者 (<span id="spectatorCount">0</span>)</span>
+                </div>
+                <div class="spectators-list" id="spectatorsList">
+                    <!-- 观战者会动态生成 -->
+                </div>
+            </div>
         </div>
 
         <div class="room-lobby-footer">
@@ -147,7 +162,58 @@
         </div>
     </div>
 
+    <!-- 作弊警告弹窗 -->
+    <div class="cheat-warning-modal" id="cheatWarningModal" style="display: none;">
+        <div class="cheat-warning-content">
+            <div class="cheat-warning-icon">
+                <svg viewBox="0 0 24 24" width="48" height="48" stroke="#f59e0b" fill="none">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+            </div>
+            <h3>警告</h3>
+            <p id="cheatWarningMessage">检测到异常答题行为</p>
+            <button class="cheat-warning-btn" onclick="closeCheatWarning()">我知道了</button>
+        </div>
+    </div>
+
+    <!-- 被踢出弹窗 -->
+    <div class="kicked-modal" id="kickedModal" style="display: none;">
+        <div class="kicked-content">
+            <div class="kicked-icon">
+                <svg viewBox="0 0 24 24" width="48" height="48" stroke="#ef4444" fill="none">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="15" y1="9" x2="9" y2="15"></line>
+                    <line x1="9" y1="9" x2="15" y2="15"></line>
+                </svg>
+            </div>
+            <h3>你已被踢出房间</h3>
+            <p id="kickedMessage">您已被房主踢出房间</p>
+            <p class="kicked-info">你已成为观战者，可以观看游戏进行</p>
+            <button class="kicked-btn" onclick="closeKickedModal()">继续观战</button>
+        </div>
+    </div>
+
+    <!-- 黑名单弹窗 -->
+    <div class="blacklist-modal" id="blacklistModal" style="display: none;">
+        <div class="blacklist-content">
+            <div class="blacklist-icon">
+                <svg viewBox="0 0 24 24" width="48" height="48" stroke="#dc2626" fill="none">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+                </svg>
+            </div>
+            <h3>账号已被封禁</h3>
+            <p id="blacklistMessage">检测到作弊行为</p>
+            <p class="blacklist-info">你已被加入黑名单，无法参与游戏和排行榜</p>
+            <button class="blacklist-btn" onclick="goToLobby()">返回大厅</button>
+        </div>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script>
+    <script src="js/security.js"></script>
+    <script src="js/toast.js"></script>
     <script src="js/socket-client.js"></script>
     <script src="js/game-state.js"></script>
     <script src="js/avatar-library.js"></script>

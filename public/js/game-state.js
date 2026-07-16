@@ -21,11 +21,17 @@ const GameState = {
         }
 
         const status = room.status;
+        const gameMode = room.gameMode || room.type || 'classic';
         const painterId = room.currentPainter;
 
         // 房间页：只应在等待或结束状态
         if (currentPage === 'room-lobby') {
             if (status === this.STATUS.PLAYING) {
+                // 根据游戏类型跳转
+                if (gameMode === 'gobang') {
+                    return { valid: false, redirect: 'gobang-online.html' };
+                }
+                // 你画我猜游戏
                 const target = currentPlayerId === painterId ? 'painter.html' : 'guesser.html';
                 return { valid: false, redirect: target };
             }

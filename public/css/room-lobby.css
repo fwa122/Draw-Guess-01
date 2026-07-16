@@ -587,3 +587,202 @@
         justify-content: center;
     }
 }
+
+/* ===== 观战者区域 ===== */
+.spectators-section {
+    margin-top: 20px;
+    padding: 16px;
+    background: rgba(241, 245, 249, 0.5);
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.spectators-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.spectators-header svg {
+    opacity: 0.7;
+}
+
+.spectators-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.spectator-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: var(--radius-full);
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.spectator-item .spectator-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+}
+
+/* ===== 踢人按钮 ===== */
+.player-kick-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: all var(--transition-normal);
+}
+
+.player-card:hover .player-kick-btn {
+    opacity: 1;
+}
+
+.player-kick-btn:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: var(--error);
+    transform: scale(1.1);
+}
+
+.player-kick-btn svg {
+    width: 12px;
+    height: 12px;
+    stroke: #ef4444;
+    stroke-width: 2;
+    fill: none;
+}
+
+/* ===== 作弊警告弹窗 ===== */
+.cheat-warning-modal,
+.kicked-modal,
+.blacklist-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.cheat-warning-content,
+.kicked-content,
+.blacklist-content {
+    background: white;
+    border-radius: var(--radius-lg);
+    padding: 32px;
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.cheat-warning-icon,
+.kicked-icon,
+.blacklist-icon {
+    margin-bottom: 16px;
+}
+
+.cheat-warning-content h3,
+.kicked-content h3,
+.blacklist-content h3 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+}
+
+.cheat-warning-content p,
+.kicked-content p,
+.blacklist-content p {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.kicked-info,
+.blacklist-info {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 20px !important;
+}
+
+.cheat-warning-btn,
+.kicked-btn,
+.blacklist-btn {
+    padding: 12px 32px;
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all var(--transition-normal);
+}
+
+.cheat-warning-btn {
+    background: linear-gradient(135deg, #f59e0b, #fbbf24);
+    color: white;
+}
+
+.cheat-warning-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(245, 158, 11, 0.4);
+}
+
+.kicked-btn {
+    background: linear-gradient(135deg, #ef4444, #f87171);
+    color: white;
+}
+
+.kicked-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4);
+}
+
+.blacklist-btn {
+    background: linear-gradient(135deg, #dc2626, #ef4444);
+    color: white;
+}
+
+.blacklist-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(220, 38, 38, 0.4);
+}

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>五子棋 - 你画我猜游戏平台</title>
+    <link rel="stylesheet" href="/css/gobang.css">
+</head>
+<body>
+    <div class="game-container">
+        <!-- 游戏头部 -->
+        <div class="game-header">
+            <button class="back-btn" onclick="goBack()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5"/>
+                    <path d="M12 19l-7-7 7-7"/>
+                </svg>
+            </button>
+            <h1 class="game-title">五子棋</h1>
+            <button class="restart-btn" onclick="restartGame()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M23 4v6h-6"/>
+                    <path d="M1 20v-6h6"/>
+                    <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                </svg>
+                重新开始
+            </button>
+        </div>
+
+        <!-- 玩家信息 -->
+        <div class="players-panel">
+            <!-- 黑棋玩家 -->
+            <div class="player-card" id="blackPlayer">
+                <div class="player-avatar black">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="12" cy="12" r="10"/>
+                    </svg>
+                </div>
+                <div class="player-info">
+                    <div class="player-name" id="blackPlayerName">黑方</div>
+                    <div class="player-status">等待中</div>
+                </div>
+                <div class="player-timer" id="blackTimer">--:--</div>
+            </div>
+
+            <!-- 游戏状态 -->
+            <div class="game-status">
+                <div class="current-turn" id="currentTurn">
+                    <span class="turn-indicator black"></span>
+                    <span class="turn-text">黑方执子</span>
+                </div>
+                <div class="move-count" id="moveCount">第 0 手</div>
+            </div>
+
+            <!-- 白棋玩家 -->
+            <div class="player-card" id="whitePlayer">
+                <div class="player-avatar white">
+                    <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1">
+                        <circle cx="12" cy="12" r="10"/>
+                    </svg>
+                </div>
+                <div class="player-info">
+                    <div class="player-name" id="whitePlayerName">白方</div>
+                    <div class="player-status">等待中</div>
+                </div>
+                <div class="player-timer" id="whiteTimer">--:--</div>
+            </div>
+        </div>
+
+        <!-- 游戏棋盘 -->
+        <div class="board-container">
+            <canvas id="gobangBoard" width="600" height="600"></canvas>
+        </div>
+
+        <!-- 游戏控制面板 -->
+        <div class="control-panel">
+            <button class="control-btn" onclick="undoMove()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 7v6h6"/>
+                    <path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/>
+                </svg>
+                悔棋
+            </button>
+            <button class="control-btn" onclick="toggleAI()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+                </svg>
+                AI对战
+            </button>
+            <button class="control-btn" onclick="toggleSound()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                    <path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/>
+                </svg>
+                音效
+            </button>
+        </div>
+
+        <!-- 历史记录面板 -->
+        <div class="history-panel">
+            <h3 class="history-title">落子记录</h3>
+            <div class="history-list" id="historyList">
+                <div class="history-empty">暂无记录</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 游戏结束弹窗 -->
+    <div class="game-over-modal" id="gameOverModal">
+        <div class="modal-content">
+            <div class="winner-icon" id="winnerIcon">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="12" cy="12" r="10"/>
+                </svg>
+            </div>
+            <h2 class="winner-text" id="winnerText">黑方获胜</h2>
+            <div class="game-stats">
+                <div class="stat-item">
+                    <span class="stat-label">总手数</span>
+                    <span class="stat-value" id="totalMoves">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">用时</span>
+                    <span class="stat-value" id="totalTime">00:00</span>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeModal()">返回大厅</button>
+                <button class="btn btn-primary" onclick="restartGame()">再来一局</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/gobang.js"></script>
+</body>
+</html>

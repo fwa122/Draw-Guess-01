@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Canvas 绘画应用</title>
     <link rel="stylesheet" href="css/common.css">
+    <link rel="stylesheet" href="css/toast.css">
     <style>
         :root {
             /* 主题色 - 浅色系 */
@@ -2571,6 +2572,8 @@
 
     <!-- Socket.io -->
     <script src="/socket.io/socket.io.js"></script>
+    <script src="js/security.js"></script>
+    <script src="js/toast.js"></script>
     <script src="js/socket-client.js"></script>
     <script src="js/game-state.js"></script>
     <script src="js/bgm-manager.js"></script>
@@ -2878,13 +2881,15 @@
 
         // 发送画布数据（兼容旧方式，现在主要使用矢量笔迹同步）
         function sendCanvasData() {
-            const imageData = canvas.toDataURL('image/png', 0.5);
+            // 性能优化：使用 JPEG 格式，质量 0.6，比 PNG 小约 60%
+            const imageData = canvas.toDataURL('image/jpeg', 0.6);
             socketClient.sendCanvasUpdate(imageData, roomCode);
         }
 
         // 发送画布快照（用于中途加入同步）
         function sendCanvasSnapshot() {
-            const imageData = canvas.toDataURL('image/png', 0.5);
+            // 性能优化：使用 JPEG 格式，质量 0.6
+            const imageData = canvas.toDataURL('image/jpeg', 0.6);
             const timestamp = Date.now();
             socketClient.sendCanvasSnapshot(imageData, timestamp, roomCode);
         }
